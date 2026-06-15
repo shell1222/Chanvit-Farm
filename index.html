@@ -1224,6 +1224,19 @@ async function loadState(){
       showToast('⚠️ โหลดจาก Cloud ไม่สำเร็จ ใช้ข้อมูลในเครื่องแทน');
     }catch(e2){ resetState(); }
   }
+  // Merge users from localStorage — fixes Firebase data loss when another device overwrites
+  try{
+    const localRaw = localStorage.getItem('farm-data');
+    if(localRaw){
+      const local = JSON.parse(localRaw);
+      let changed = false;
+      (local.users||[]).forEach(u=>{ if(!STATE.users.includes(u)){ STATE.users.push(u); changed=true; } });
+      if(local.userRoles) Object.entries(local.userRoles).forEach(([u,r])=>{ if(!STATE.userRoles) STATE.userRoles={}; if(!STATE.userRoles[u]){ STATE.userRoles[u]=r; changed=true; } });
+      if(local.pinUsers) local.pinUsers.forEach(u=>{ if(!(STATE.pinUsers||[]).includes(u)){ if(!STATE.pinUsers) STATE.pinUsers=[]; STATE.pinUsers.push(u); changed=true; } });
+      if(local.userPins) Object.entries(local.userPins).forEach(([u,p])=>{ if(!STATE.userPins) STATE.userPins={}; if(!STATE.userPins[u]){ STATE.userPins[u]=p; changed=true; } });
+      if(changed) saveState();
+    }
+  }catch(e){}
   applyLogo();
 }
 
