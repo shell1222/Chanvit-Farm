@@ -1080,6 +1080,7 @@ let STATE = {
   pondCosts: {},      // legacy cost from status tab
   pondCosts2: {},     // {pondId: {postlarva, feed, ...}} summary totals
   pondCostDetails: {},// {pondId: [{category, name, priceUnit, qty, unit, total, user, ts}]}
+  pondHarvests: {},   // {pondId: [{type:'partial'|'close', kg, price, revenue}]}
   productCatalog: [], // unified product db (built-in + custom), saved to localStorage
   activityLog: [],    // [{ts, user, type, detail}]
   userRoles: {},      // {username: 'admin'|'superuser'|'user'}
@@ -1191,6 +1192,7 @@ function applyLoaded(loaded){
   STATE.pondCosts = loaded.pondCosts || {};
   STATE.pondCosts2 = loaded.pondCosts2 || {};
   STATE.pondCostDetails = loaded.pondCostDetails || {};
+  STATE.pondHarvests = loaded.pondHarvests || {};
   STATE.productCatalog = loaded.productCatalog && loaded.productCatalog.length > 0
     ? loaded.productCatalog : JSON.parse(JSON.stringify(PRODUCT_CATALOG));
   STATE.activityLog = loaded.activityLog || [];
@@ -1200,7 +1202,7 @@ function applyLoaded(loaded){
 }
 function resetState(){
   STATE.ponds = DEFAULT_PONDS; STATE.users = []; STATE.pondStatus = {};
-  STATE.pondCosts = {}; STATE.pondCosts2 = {}; STATE.pondCostDetails = {};
+  STATE.pondCosts = {}; STATE.pondCosts2 = {}; STATE.pondCostDetails = {}; STATE.pondHarvests = {};
   STATE.productCatalog = JSON.parse(JSON.stringify(PRODUCT_CATALOG));
   STATE.activityLog = [];
   STATE.userRoles = {};
@@ -1252,6 +1254,7 @@ async function saveState(){
     pondCosts: STATE.pondCosts,
     pondCosts2: STATE.pondCosts2 || {},
     pondCostDetails: STATE.pondCostDetails || {},
+    pondHarvests: STATE.pondHarvests || {},
     productCatalog: STATE.productCatalog || [],
     activityLog: STATE.activityLog || [],
     userRoles: STATE.userRoles || {},
@@ -2575,22 +2578,102 @@ function removePond(idx){
 /* ============================================================
    HISTORY TAB
    ============================================================ */
-function calcRevenueFromPrice(pondId, totalKg){
-  const priceEl = document.getElementById('modalPricePerKg_'+pondId);
-  const revEl = document.getElementById('modalRevenue_'+pondId);
-  if(!priceEl || !revEl) return;
-  const price = parseFloat(priceEl.value) || 0;
-  if(price > 0 && totalKg > 0) revEl.value = Math.round(price * totalKg * 100) / 100;
+function toggleHarvestForm(pondId){
+  const f = document.getElementById('harvestForm_'+pondId);
+  const show = f.style.display === 'none';
+  f.style.display = show ? 'block' : 'none';
+  if(show){
+    if(!STATE.pondHarvests) STATE.pondHarvests = {};
+    if(!STATE.pondHarvests[pondId] || STATE.pondHarvests[pondId].length === 0){
+      const s = STATE.pondStatus[pondId] || {};
+      STATE.pondHarvests[pondId] = s.revenue ? [{type:'close',kg:'',price:'',revenue:s.revenue}] : [{type:'partial',kg:'',price:''}];
+    }
+    renderHarvestRows(pondId);
+    setTimeout(()=>{ f.scrollIntoView({behavior:'smooth',block:'nearest'}); },50);
+  }
 }
 
-function saveRevenueInModal(pondId){
-  const revEl = document.getElementById('modalRevenue_'+pondId);
-  if(!revEl) return;
-  const revenue = revEl.value !== '' ? parseFloat(revEl.value) : null;
+function renderHarvestRows(pondId){
+  const rows = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+  const container = document.getElementById('harvestRows_'+pondId);
+  if(!container) return;
+  container.innerHTML = '';
+  const inp = 'border:1.5px solid #a7f3d0;border-radius:8px;padding:6px 8px;font-size:13px;background:#fff;width:100%;box-sizing:border-box;';
+  rows.forEach((row,i)=>{
+    const kg = row.kg || ''; const price = row.price || '';
+    const rev = (parseFloat(kg) && parseFloat(price)) ? parseFloat(kg)*parseFloat(price) : 0;
+    const d = document.createElement('div');
+    d.style.cssText = 'display:grid;grid-template-columns:82px 1fr 1fr 1fr 26px;gap:4px;align-items:center;margin-bottom:6px;';
+    d.innerHTML = `<select id="htype_${pondId}_${i}" style="${inp}font-size:12px;padding:6px 4px;">
+        <option value="partial" ${row.type==='partial'?'selected':''}>Partial</option>
+        <option value="close" ${row.type==='close'?'selected':''}>Close</option>
+      </select>
+      <input type="number" id="hkg_${pondId}_${i}" value="${kg}" placeholder="กก." step="0.01" style="${inp}" oninput="calcHarvestTotal('${pondId}')">
+      <input type="number" id="hprice_${pondId}_${i}" value="${price}" placeholder="฿/กก." step="0.01" style="${inp}" oninput="calcHarvestTotal('${pondId}')">
+      <span id="hrev_${pondId}_${i}" style="font-size:12px;font-weight:700;color:var(--primary-dark);text-align:right;">${rev>0?rev.toLocaleString('th-TH'):'-'}</span>
+      <button onclick="removeHarvestRow('${pondId}',${i})" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:15px;padding:0;line-height:1;">✕</button>`;
+    container.appendChild(d);
+  });
+  calcHarvestTotal(pondId);
+}
+
+function addHarvestRow(pondId){
+  if(!STATE.pondHarvests) STATE.pondHarvests = {};
+  if(!STATE.pondHarvests[pondId]) STATE.pondHarvests[pondId] = [];
+  _syncHarvestDom(pondId);
+  STATE.pondHarvests[pondId].push({type:'partial',kg:'',price:''});
+  renderHarvestRows(pondId);
+}
+
+function removeHarvestRow(pondId,idx){
+  _syncHarvestDom(pondId);
+  STATE.pondHarvests[pondId].splice(idx,1);
+  renderHarvestRows(pondId);
+}
+
+function _syncHarvestDom(pondId){
+  const rows = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+  rows.forEach((row,i)=>{
+    row.type = document.getElementById('htype_'+pondId+'_'+i)?.value || 'partial';
+    row.kg   = document.getElementById('hkg_'+pondId+'_'+i)?.value || '';
+    row.price= document.getElementById('hprice_'+pondId+'_'+i)?.value || '';
+  });
+}
+
+function calcHarvestTotal(pondId){
+  const rows = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+  let total = 0;
+  rows.forEach((row,i)=>{
+    const kg = parseFloat(document.getElementById('hkg_'+pondId+'_'+i)?.value) || 0;
+    const pr = parseFloat(document.getElementById('hprice_'+pondId+'_'+i)?.value) || 0;
+    const rev = kg * pr;
+    total += rev;
+    const el = document.getElementById('hrev_'+pondId+'_'+i);
+    if(el) el.textContent = rev > 0 ? rev.toLocaleString('th-TH') : '-';
+  });
+  const el = document.getElementById('harvestTotal_'+pondId);
+  if(el) el.textContent = total.toLocaleString('th-TH') + ' บาท';
+  return total;
+}
+
+function saveHarvests(pondId){
+  if(!STATE.pondHarvests) STATE.pondHarvests = {};
+  const rows = STATE.pondHarvests[pondId] || [];
+  const harvests = []; let total = 0;
+  rows.forEach((row,i)=>{
+    const type = document.getElementById('htype_'+pondId+'_'+i)?.value || 'partial';
+    const kg   = parseFloat(document.getElementById('hkg_'+pondId+'_'+i)?.value) || 0;
+    const price= parseFloat(document.getElementById('hprice_'+pondId+'_'+i)?.value) || 0;
+    const revenue = kg * price;
+    total += revenue;
+    harvests.push({type,kg,price,revenue});
+  });
+  STATE.pondHarvests[pondId] = harvests;
   if(!STATE.pondStatus[pondId]) STATE.pondStatus[pondId] = {};
-  STATE.pondStatus[pondId].revenue = revenue;
+  STATE.pondStatus[pondId].revenue = total > 0 ? total : null;
+  logActivity('บันทึกรายได้', 'บ่อ '+pondId);
   saveState();
-  showToast('บันทึกรายได้แล้ว');
+  showToast('✅ บันทึกรายได้แล้ว');
   openPondSummaryModal(pondId);
 }
 
@@ -2732,28 +2815,40 @@ function openPondSummaryModal(pondId){
     );
 
     if(isClosed){
-      const totalKgRev = parseFloat(s.total) || 0;
-      const curRevenue = s.revenue != null ? s.revenue : '';
+      const harvests = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+      const totalRev = harvests.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0) || (s.revenue||0);
+      const revDisplay = totalRev > 0
+        ? `<span style="font-size:18px;font-weight:800;color:var(--primary-dark);">${totalRev.toLocaleString('th-TH')} <span style="font-size:12px;font-weight:500;">บาท</span></span>`
+        : `<span style="font-size:12px;color:var(--text-secondary);">ยังไม่ได้กรอก</span>`;
+      const harvestSummaryRows = harvests.map((h,i)=>`
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--text-secondary);">
+          <span>${h.type==='close'?'Close':'Partial '+(i+1)} · ${h.kg||0} กก. × ${h.price||0} ฿/กก.</span>
+          <span style="font-weight:600;color:var(--primary-dark);">${(parseFloat(h.revenue)||0).toLocaleString('th-TH')} บ.</span>
+        </div>`).join('');
       html += `<div style="background:linear-gradient(135deg,var(--primary-light),#d1fae5);border-radius:12px;padding:14px 18px;margin-top:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span style="font-size:14px;font-weight:700;color:var(--primary-dark);">💰 รายได้รวม</span>
           <div style="display:flex;align-items:center;gap:10px;">
-            ${s.revenue != null ? `<span style="font-size:20px;font-weight:800;color:var(--primary-dark);">${Number(s.revenue).toLocaleString('th-TH')} <span style="font-size:12px;font-weight:500;">บาท</span></span>` : `<span style="font-size:12px;color:var(--text-secondary);">ยังไม่ได้กรอก</span>`}
-            <button onclick="var f=document.getElementById('revenueEditForm_${pondId}');var show=f.style.display==='none';f.style.display=show?'block':'none';if(show){setTimeout(()=>{f.scrollIntoView({behavior:'smooth',block:'nearest'});f.querySelector('input').focus();},50);}" style="background:rgba(255,255,255,0.7);border:1px solid #a7f3d0;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--primary-dark);line-height:1.4;">✏️</button>
+            ${revDisplay}
+            <button onclick="toggleHarvestForm('${pondId}')" style="background:rgba(255,255,255,0.7);border:1px solid #a7f3d0;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--primary-dark);line-height:1.4;">✏️</button>
           </div>
         </div>
-        <div id="revenueEditForm_${pondId}" style="display:none;margin-top:10px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:flex-end;">
-            <div>
-              <div style="font-size:11px;color:var(--primary-dark);font-weight:600;margin-bottom:4px;">ราคาขาย/กก. (บาท)</div>
-              <input type="number" step="0.01" id="modalPricePerKg_${pondId}" placeholder="เช่น 95" style="width:100%;border:1.5px solid #a7f3d0;border-radius:8px;padding:7px 10px;font-size:14px;background:#fff;" oninput="calcRevenueFromPrice('${pondId}',${totalKgRev})">
-            </div>
-            <div>
-              <div style="font-size:11px;color:var(--primary-dark);font-weight:600;margin-bottom:4px;">รายได้รวม (บาท)</div>
-              <input type="number" step="0.01" id="modalRevenue_${pondId}" placeholder="กรอกตรงนี้" value="${curRevenue}" style="width:100%;border:1.5px solid #a7f3d0;border-radius:8px;padding:7px 10px;font-size:14px;background:#fff;">
-            </div>
-            <button onclick="saveRevenueInModal('${pondId}')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">บันทึก</button>
+        ${harvests.length > 0 ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #a7f3d0;">${harvestSummaryRows}</div>` : ''}
+        <div id="harvestForm_${pondId}" style="display:none;margin-top:12px;">
+          <div style="display:grid;grid-template-columns:82px 1fr 1fr 1fr 26px;gap:4px;margin-bottom:6px;">
+            <span style="font-size:11px;font-weight:600;color:var(--primary-dark);">ประเภท</span>
+            <span style="font-size:11px;font-weight:600;color:var(--primary-dark);">น้ำหนัก (กก.)</span>
+            <span style="font-size:11px;font-weight:600;color:var(--primary-dark);">ราคา/กก.</span>
+            <span style="font-size:11px;font-weight:600;color:var(--primary-dark);">รายได้</span>
+            <span></span>
           </div>
+          <div id="harvestRows_${pondId}"></div>
+          <button onclick="addHarvestRow('${pondId}')" style="width:100%;background:none;border:1.5px dashed #a7f3d0;border-radius:8px;padding:7px;font-size:12px;cursor:pointer;color:var(--primary);margin:4px 0 8px;">+ เพิ่มรายการจับ</button>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1.5px solid #a7f3d0;">
+            <span style="font-size:13px;font-weight:700;color:var(--primary-dark);">รวม</span>
+            <span id="harvestTotal_${pondId}" style="font-size:16px;font-weight:800;color:var(--primary-dark);">0 บาท</span>
+          </div>
+          <button onclick="saveHarvests('${pondId}')" style="width:100%;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px;">💾 บันทึก</button>
         </div>
       </div>`;
     }
