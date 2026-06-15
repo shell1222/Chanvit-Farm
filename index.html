@@ -3014,6 +3014,10 @@ function openCostForPond(pondId){
   setTimeout(()=>{
     renderCostTab();
     renderCostDetail();
+    setTimeout(()=>{
+      const el = document.getElementById('costDetailWrap');
+      if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+    }, 100);
   }, 50);
 }
 
