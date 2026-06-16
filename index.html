@@ -3732,13 +3732,16 @@ function saveCostDetailEdit(idx){
   const qtyEl   = document.getElementById('cde_qty');
   const newPrice = parseFloat(priceEl ? priceEl.value : items[idx].priceUnit) || 0;
   const newQty   = parseFloat(qtyEl ? qtyEl.value : items[idx].qty) || 0;
-  items[idx].priceUnit = newPrice;
-  items[idx].qty       = newQty;
-  items[idx].total     = newPrice * newQty;
-  _editCostDetailIdx = -1;
-  saveState();
-  renderCostDetailItems();
-  showToast('แก้ไข ' + items[idx].name + ' แล้ว');
+  const name = items[idx].name;
+  showConfirm('ยืนยันแก้ไข "' + name + '"?', function(){
+    items[idx].priceUnit = newPrice;
+    items[idx].qty       = newQty;
+    items[idx].total     = newPrice * newQty;
+    _editCostDetailIdx = -1;
+    saveState();
+    renderCostDetailItems();
+    showToast('แก้ไข ' + name + ' แล้ว');
+  });
 }
 
 function calcCdPreview(){
