@@ -3374,6 +3374,23 @@ function showToast(msg){
   setTimeout(()=>toast.classList.remove('show'), 2200);
 }
 
+function showConfirm(msg, onConfirm){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:24px 28px;max-width:320px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">
+    <div style="font-size:32px;margin-bottom:10px;">⚠️</div>
+    <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:20px;line-height:1.5;">${msg}</div>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button id="confirmCancel" style="flex:1;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-size:14px;font-weight:600;cursor:pointer;color:var(--text);">ยกเลิก</button>
+      <button id="confirmOk" style="flex:1;padding:10px;border:none;border-radius:10px;background:#ef4444;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">ลบ</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#confirmCancel').onclick = ()=>overlay.remove();
+  overlay.querySelector('#confirmOk').onclick = ()=>{ overlay.remove(); onConfirm(); };
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
+}
+
 /* ============================================================
    COST TAB
    ============================================================ */
@@ -3516,7 +3533,7 @@ function renderCostDetail(){
       + ' id="cf_' + item.id + '" value="' + val + '"'
       + ' oninput="calcCostTotal()" placeholder="0"></td>'
       + '<td class="cost-perkg-col cost-perkg-val" id="cfkg_' + item.id + '">' + perkg + '</td>'
-      + '<td style="width:28px;text-align:center;"><button onclick="document.getElementById(\'cf_' + item.id + '\').value=\'\';calcCostTotal();" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:14px;padding:0;line-height:1;" title="ล้างค่า">🗑</button></td>';
+      + '<td style="width:28px;text-align:center;"><button onclick="showConfirm(\'ล้างค่า ' + item.label + '?\',function(){document.getElementById(\'cf_' + item.id + '\').value=\'\';calcCostTotal();})" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:14px;padding:0;line-height:1;" title="ล้างค่า">🗑</button></td>';
     tbody.appendChild(row);
   });
 
@@ -3773,10 +3790,12 @@ function removeCostDetailItem(idx){
   if(!costSelectedPond) return;
   if(!STATE.pondCostDetails || !STATE.pondCostDetails[costSelectedPond]) return;
   const name = STATE.pondCostDetails[costSelectedPond][idx] ? STATE.pondCostDetails[costSelectedPond][idx].name : '';
-  STATE.pondCostDetails[costSelectedPond].splice(idx, 1);
-  saveState();
-  renderCostDetailItems();
-  showToast('ลบ ' + name + ' แล้ว');
+  showConfirm('ลบ "' + name + '" ออกจากรายการ?', function(){
+    STATE.pondCostDetails[costSelectedPond].splice(idx, 1);
+    saveState();
+    renderCostDetailItems();
+    showToast('ลบ ' + name + ' แล้ว');
+  });
 }
 
 // Autocomplete for cdName
