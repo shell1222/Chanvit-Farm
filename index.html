@@ -3515,7 +3515,8 @@ function renderCostDetail(){
       + '<td><input class="cost-num-input" type="number" min="0" step="1"'
       + ' id="cf_' + item.id + '" value="' + val + '"'
       + ' oninput="calcCostTotal()" placeholder="0"></td>'
-      + '<td class="cost-perkg-col cost-perkg-val" id="cfkg_' + item.id + '">' + perkg + '</td>';
+      + '<td class="cost-perkg-col cost-perkg-val" id="cfkg_' + item.id + '">' + perkg + '</td>'
+      + '<td style="width:28px;text-align:center;"><button onclick="document.getElementById(\'cf_' + item.id + '\').value=\'\';calcCostTotal();" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:14px;padding:0;line-height:1;" title="ล้างค่า">🗑</button></td>';
     tbody.appendChild(row);
   });
 
