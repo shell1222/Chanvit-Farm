@@ -3047,6 +3047,7 @@ function openPondSummaryModal(pondId){
       html += `<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:10px;">`;
       COST_ITEMS.forEach(it => {
         const val = parseFloat(costs2[it.id]) || 0;
+        if(val === 0) return;
         const canExpand = (it.id === 'feed' || it.id === 'chemical');
         const detailItems = details.filter(d => d.category === it.id);
         const expandId = `costDetail_${pondId}_${it.id}`;
@@ -3075,6 +3076,7 @@ function openPondSummaryModal(pondId){
       (costs2._custom || []).forEach(item => {
         if(!item.name && !item.amount) return;
         const val = parseFloat(item.amount) || 0;
+        if(val === 0) return;
         html += `<div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#fff;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <span style="font-size:13px;font-weight:600;color:var(--text);">${item.name || 'รายการเพิ่มเติม'}</span>
