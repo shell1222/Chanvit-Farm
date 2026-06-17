@@ -2629,13 +2629,10 @@ function calcPondInfo(pondId, area){
   const chlorine = area > 0 && depth > 0 ? area * 1.6 * depth * chlFactor : null;
   const dye      = area * 3;
 
-  function card(icon, name, formula, value, unit){
+  function card(icon, name, value, unit){
     const hasVal = value !== null && area > 0;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:10px;background:var(--bg);border:1px solid var(--border);margin-bottom:8px;">
-      <div>
-        <div style="font-size:13px;font-weight:700;color:var(--text);">${icon} ${name}</div>
-        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${formula}</div>
-      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);">${icon} ${name}</div>
       <div style="text-align:right;">
         ${hasVal ? `<div style="font-size:18px;font-weight:800;color:var(--primary);">${value.toLocaleString('th-TH',{maximumFractionDigits:2})}</div><div style="font-size:11px;color:var(--text-secondary);">${unit}</div>`
                  : `<div style="font-size:13px;color:var(--text-secondary);">${area > 0 ? 'กรอกความลึก' : 'ไม่มีข้อมูลพื้นที่'}</div>`}
@@ -2644,11 +2641,11 @@ function calcPondInfo(pondId, area){
   }
 
   el.innerHTML =
-    card('🔵','คอปเปอร์',     `พื้นที่ × 5 = ${area} × 5`,        copper,   'กก.') +
-    card('🟡','ซันเทอร์แร็กซ์', `พื้นที่ × 1 ถัง = ${area} × 1`,   sun,      'ถัง') +
-    card('🟣','ด่างทับทิม',    `พื้นที่ × 1.6 × ความลึก × 5`,     km,       'กก.') +
-    card('🟢','คลอรีน',       `พื้นที่ × 1.6 × ความลึก × ${chlFactor}`, chlorine, 'กก.') +
-    card('🔵','สีน้ำเทียม',    `พื้นที่ × 3 = ${area} × 3`,        dye,      'ลิตร');
+    card('🔵','คอปเปอร์',      copper,   'กก.') +
+    card('🟡','ซันเทอร์แร็กซ์ (1 ไร่/1 ถัง)', sun, 'ถัง') +
+    card('🟣','ด่างทับทิม',    km,       'กก.') +
+    card('🟢','คลอรีน',       chlorine, 'กก.') +
+    card('🔵','สีน้ำเทียม',    dye,      'ลิตร');
 }
 
 function moonAge(date){
