@@ -2602,11 +2602,11 @@ function openPondInfoModal(pondId){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px;">ความลึกน้ำ (เมตร)</label>
-          <input type="number" id="piDepth_${pondId}" step="0.1" placeholder="เช่น 1.2" style="width:100%;border:1.5px solid #a7f3d0;border-radius:8px;padding:7px 10px;font-size:14px;background:#fff;box-sizing:border-box;" oninput="calcPondInfo('${pondId}',${area})">
+          <input type="number" id="piDepth_${pondId}" step="0.1" placeholder="เช่น 1.2" style="width:100%;border:1.5px solid #a7f3d0;border-radius:8px;padding:7px 10px;font-size:16px;background:#fff;box-sizing:border-box;" oninput="calcPondInfo('${pondId}',${area})" onblur="resetViewportZoom()">
         </div>
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px;">คลอรีน (×5 หรือ ×10)</label>
-          <select id="piChlFactor_${pondId}" style="width:100%;border:1.5px solid #a7f3d0;border-radius:8px;padding:7px 10px;font-size:14px;background:#fff;box-sizing:border-box;" onchange="calcPondInfo('${pondId}',${area})">
+          <select id="piChlFactor_${pondId}" style="width:100%;border:1.5px solid #a7f3d0;border-radius:8px;padding:7px 10px;font-size:16px;background:#fff;box-sizing:border-box;" onchange="calcPondInfo('${pondId}',${area})" onblur="resetViewportZoom()">
             <option value="5">× 5</option>
             <option value="10">× 10</option>
           </select>
@@ -3660,6 +3660,13 @@ function formatDateShort(dateStr){
   const d = new Date(dateStr + 'T00:00:00');
   const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   return `${d.getDate()} ${months[d.getMonth()]}`;
+}
+
+function resetViewportZoom(){
+  const vp = document.querySelector('meta[name="viewport"]');
+  if(!vp) return;
+  vp.setAttribute('content','width=device-width,initial-scale=1,maximum-scale=1');
+  setTimeout(()=>vp.setAttribute('content','width=device-width,initial-scale=1'),300);
 }
 
 function showToast(msg){
