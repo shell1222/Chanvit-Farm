@@ -3412,32 +3412,51 @@ function renderSummaryTab(){
   const profitLabel = netProfit >= 0 ? '💚 กำไรสุทธิ' : '🔴 ขาดทุนสุทธิ';
 
   const statsEl = document.getElementById('summaryStats');
+  const profitBg = netProfit >= 0 ? 'linear-gradient(135deg,#ecfdf5,#d1fae5)' : 'linear-gradient(135deg,#fff1f2,#fee2e2)';
+  const profitBorder = netProfit >= 0 ? '#6ee7b7' : '#fca5a5';
   statsEl.innerHTML = `
-    <div class="stat"><div class="label">บ่อที่ลงแล้ว</div><div class="value">${totalPonds} บ่อ</div></div>
-    <div class="stat"><div class="label">ผลผลิตรวม (กก.)</div><div class="value">${totalHarvestKg.toLocaleString('th-TH')}</div></div>
-    <div class="stat" style="grid-column:1/-1;background:linear-gradient(135deg,var(--primary-light),#d1fae5);border-radius:14px;padding:14px 16px;margin-top:4px;">
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div onclick="showYearlyDetail('revenue')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.55);border-radius:10px;padding:10px 14px;transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,0.8)'" onmouseout="this.style.background='rgba(255,255,255,0.55)'">
-          <div style="font-size:13px;font-weight:700;color:var(--text-secondary);">💰 รายได้รวม</div>
-          <div style="text-align:right;">
-            <div style="font-size:16px;font-weight:800;color:#0f6e56;">${totalRevenue > 0 ? totalRevenue.toLocaleString('th-TH')+' บ.' : '-'}</div>
-            <div style="font-size:10px;color:var(--primary);">แตะดูรายละเอียด →</div>
+    <div class="stat" style="background:linear-gradient(135deg,#f0fdf4,#ecfdf5);">
+      <div style="font-size:11px;color:var(--text-secondary);font-weight:600;margin-bottom:6px;">🐟 บ่อที่ลงแล้ว</div>
+      <div style="font-size:26px;font-weight:800;color:var(--primary-dark);line-height:1;">${totalPonds}</div>
+      <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">บ่อ</div>
+    </div>
+    <div class="stat" style="background:linear-gradient(135deg,#f0fdf4,#ecfdf5);">
+      <div style="font-size:11px;color:var(--text-secondary);font-weight:600;margin-bottom:6px;">⚖️ ผลผลิตรวม</div>
+      <div style="font-size:20px;font-weight:800;color:var(--primary-dark);line-height:1;">${totalHarvestKg.toLocaleString('th-TH')}</div>
+      <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">กิโลกรัม</div>
+    </div>
+    <div style="grid-column:1/-1;background:#fff;border-radius:16px;border:1.5px solid var(--border);overflow:hidden;margin-top:2px;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
+      <div onclick="showYearlyDetail('revenue')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:38px;height:38px;border-radius:10px;background:#ecfdf5;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;">💰</div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);">รายได้รวม</div>
+            <div style="font-size:10px;color:var(--primary);margin-top:1px;">แตะดูรายละเอียด →</div>
           </div>
         </div>
-        <div onclick="showYearlyDetail('cost')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.55);border-radius:10px;padding:10px 14px;transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,0.8)'" onmouseout="this.style.background='rgba(255,255,255,0.55)'">
-          <div style="font-size:13px;font-weight:700;color:var(--text-secondary);">📋 ต้นทุนรวม</div>
-          <div style="text-align:right;">
-            <div style="font-size:16px;font-weight:800;color:#854f0b;">${totalCost > 0 ? totalCost.toLocaleString('th-TH')+' บ.' : '-'}</div>
-            <div style="font-size:10px;color:var(--primary);">แตะดูรายละเอียด →</div>
+        <div style="font-size:17px;font-weight:800;color:#0f6e56;white-space:nowrap;">${totalRevenue > 0 ? totalRevenue.toLocaleString('th-TH')+' ฿' : '-'}</div>
+      </div>
+      <div style="height:1px;background:var(--border);"></div>
+      <div onclick="showYearlyDetail('cost')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:38px;height:38px;border-radius:10px;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;">📋</div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);">ต้นทุนรวม</div>
+            <div style="font-size:10px;color:var(--primary);margin-top:1px;">แตะดูรายละเอียด →</div>
           </div>
         </div>
-        <div onclick="showYearlyDetail('profit')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.7);border-radius:10px;padding:10px 14px;border:2px solid ${netProfit>=0?'#6ee7b7':'#fca5a5'};transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,0.9)'" onmouseout="this.style.background='rgba(255,255,255,0.7)'">
-          <div style="font-size:13px;font-weight:700;color:var(--text-secondary);">${profitLabel}</div>
-          <div style="text-align:right;">
-            <div style="font-size:18px;font-weight:800;color:${profitColor};">${(totalRevenue > 0 || totalCost > 0) ? Math.abs(netProfit).toLocaleString('th-TH')+' บ.' : '-'}</div>
-            <div style="font-size:10px;color:var(--primary);">แตะดูรายละเอียด →</div>
+        <div style="font-size:17px;font-weight:800;color:#92400e;white-space:nowrap;">${totalCost > 0 ? totalCost.toLocaleString('th-TH')+' ฿' : '-'}</div>
+      </div>
+      <div style="height:1px;background:var(--border);"></div>
+      <div onclick="showYearlyDetail('profit')" style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;background:${profitBg};border-top:2px solid ${profitBorder};transition:opacity .15s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,0.7);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;">${netProfit>=0?'📈':'📉'}</div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);">${netProfit>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'}</div>
+            <div style="font-size:10px;color:var(--primary);margin-top:1px;">แตะดูรายละเอียด →</div>
           </div>
         </div>
+        <div style="font-size:19px;font-weight:800;color:${profitColor};white-space:nowrap;">${(totalRevenue>0||totalCost>0)?Math.abs(netProfit).toLocaleString('th-TH')+' ฿':'-'}</div>
       </div>
     </div>
   `;
