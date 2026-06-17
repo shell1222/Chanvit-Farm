@@ -976,6 +976,13 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Modal สรุปรายได้/ต้นทุน/กำไรปีนี้ -->
+<div id="yearlyDetailModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-box" style="max-width:620px;">
+    <div id="yearlyDetailContent" style="overflow-y:auto;max-height:88vh;border-radius:16px;padding:20px;"></div>
+  </div>
+</div>
+
 <!-- Modal สรุปข้อมูลบ่อ -->
 <div id="pondSummaryModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closePondSummaryModal()">
   <div class="modal-box" style="max-width:580px;">
@@ -3120,6 +3127,72 @@ function setSummarySort(col){
   renderSummaryTab();
 }
 
+function showYearlyDetail(type){
+  const year = new Date().getFullYear().toString();
+  const closedEntries = [];
+  STATE.ponds.forEach(p => {
+    const s = STATE.pondStatus[p.id];
+    if(!s || !s.releaseDate || !s.releaseDate.startsWith(year)) return;
+    if(s.status !== 'closed') return;
+    const c = (STATE.pondCosts2 && STATE.pondCosts2[p.id]) || {};
+    const fixed = Object.keys(c).filter(k=>k!=='_custom'&&k!=='_labels').reduce((s,k)=>s+(parseFloat(c[k])||0),0);
+    const custom = (c._custom||[]).reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
+    closedEntries.push({
+      pondId: p.id,
+      revenue: parseFloat(s.revenue) || 0,
+      cost: fixed + custom,
+      profit: (parseFloat(s.revenue)||0) - (fixed+custom)
+    });
+  });
+
+  const titles = {revenue:'💰 รายได้รวมปีนี้ — แยกตามบ่อ', cost:'📋 ต้นทุนรวมปีนี้ — แยกตามบ่อ', profit:'📊 กำไร/ขาดทุนปีนี้ — แยกตามบ่อ'};
+  let rows = '';
+  closedEntries.forEach(e => {
+    const profitColor = e.profit >= 0 ? '#0f6e56' : '#dc2626';
+    const profitSign  = e.profit >= 0 ? '+' : '-';
+    rows += `<tr style="cursor:pointer;" onclick="document.getElementById('yearlyDetailModal').style.display='none';openPondSummaryModal('${e.pondId}')">
+      <td style="font-weight:700;color:var(--primary);">บ่อ ${e.pondId}</td>
+      <td style="text-align:right;">${e.revenue > 0 ? e.revenue.toLocaleString('th-TH') : '-'}</td>
+      <td style="text-align:right;">${e.cost > 0 ? e.cost.toLocaleString('th-TH') : '-'}</td>
+      <td style="text-align:right;font-weight:700;color:${profitColor};">${(e.revenue>0||e.cost>0) ? profitSign+Math.abs(e.profit).toLocaleString('th-TH') : '-'}</td>
+    </tr>`;
+  });
+
+  const totalRev  = closedEntries.reduce((s,e)=>s+e.revenue,0);
+  const totalCost = closedEntries.reduce((s,e)=>s+e.cost,0);
+  const totalProfit = totalRev - totalCost;
+  const tColor = totalProfit >= 0 ? '#0f6e56' : '#dc2626';
+
+  document.getElementById('yearlyDetailContent').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="font-size:16px;font-weight:800;color:var(--text);margin:0;">${titles[type]}</h3>
+      <button onclick="document.getElementById('yearlyDetailModal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-secondary);">✕</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="background:var(--primary-light);">
+          <th style="padding:8px 12px;text-align:left;border-radius:8px 0 0 8px;">บ่อ</th>
+          <th style="padding:8px 12px;text-align:right;">รายได้ (บ.)</th>
+          <th style="padding:8px 12px;text-align:right;">ต้นทุน (บ.)</th>
+          <th style="padding:8px 12px;text-align:right;border-radius:0 8px 8px 0;">กำไร/ขาดทุน</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows || '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-secondary);">ยังไม่มีข้อมูลบ่อที่ปิดแล้ว</td></tr>'}
+      </tbody>
+      <tfoot>
+        <tr style="border-top:2px solid var(--border);font-weight:800;font-size:14px;">
+          <td style="padding:10px 12px;">รวมทั้งหมด</td>
+          <td style="padding:10px 12px;text-align:right;color:#0f6e56;">${totalRev > 0 ? totalRev.toLocaleString('th-TH') : '-'}</td>
+          <td style="padding:10px 12px;text-align:right;color:#854f0b;">${totalCost > 0 ? totalCost.toLocaleString('th-TH') : '-'}</td>
+          <td style="padding:10px 12px;text-align:right;color:${tColor};">${(totalRev>0||totalCost>0)?(totalProfit>=0?'+':'-')+Math.abs(totalProfit).toLocaleString('th-TH'):'-'}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <p style="font-size:11px;color:var(--text-secondary);margin-top:12px;text-align:center;">คลิกที่บ่อเพื่อดูรายละเอียด</p>`;
+  document.getElementById('yearlyDetailModal').style.display = 'flex';
+}
+
 function renderSummaryTab(){
   const year = new Date().getFullYear().toString();
   const entries = [];
@@ -3178,17 +3251,20 @@ function renderSummaryTab(){
     <div class="stat"><div class="label">ผลผลิตรวม (กก.)</div><div class="value">${totalHarvestKg.toLocaleString('th-TH')}</div></div>
     <div class="stat" style="grid-column:1/-1;background:linear-gradient(135deg,var(--primary-light),#d1fae5);border-radius:14px;padding:16px 20px;margin-top:4px;">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;">
-        <div>
+        <div onclick="showYearlyDetail('revenue')" style="cursor:pointer;border-radius:10px;padding:6px;transition:background .15s;" onmouseover="this.style.background='rgba(0,0,0,0.04)'" onmouseout="this.style.background=''">
           <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">💰 รายได้รวม</div>
           <div style="font-size:16px;font-weight:800;color:#0f6e56;">${totalRevenue > 0 ? totalRevenue.toLocaleString('th-TH')+' บ.' : '-'}</div>
+          <div style="font-size:10px;color:var(--primary);margin-top:2px;">แตะเพื่อดูรายละเอียด →</div>
         </div>
-        <div>
+        <div onclick="showYearlyDetail('cost')" style="cursor:pointer;border-radius:10px;padding:6px;transition:background .15s;" onmouseover="this.style.background='rgba(0,0,0,0.04)'" onmouseout="this.style.background=''">
           <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">📋 ต้นทุนรวม</div>
           <div style="font-size:16px;font-weight:800;color:#854f0b;">${totalCost > 0 ? totalCost.toLocaleString('th-TH')+' บ.' : '-'}</div>
+          <div style="font-size:10px;color:var(--primary);margin-top:2px;">แตะเพื่อดูรายละเอียด →</div>
         </div>
-        <div style="border-left:2px solid #a7f3d0;padding-left:12px;">
+        <div onclick="showYearlyDetail('profit')" style="cursor:pointer;border-radius:10px;padding:6px;border-left:2px solid #a7f3d0;padding-left:12px;transition:background .15s;" onmouseover="this.style.background='rgba(0,0,0,0.04)'" onmouseout="this.style.background=''">
           <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">${profitLabel}</div>
           <div style="font-size:18px;font-weight:800;color:${profitColor};">${(totalRevenue > 0 || totalCost > 0) ? Math.abs(netProfit).toLocaleString('th-TH')+' บ.' : '-'}</div>
+          <div style="font-size:10px;color:var(--primary);margin-top:2px;">แตะเพื่อดูรายละเอียด →</div>
         </div>
       </div>
     </div>
