@@ -848,6 +848,12 @@
       </div>
     </div>
 
+    <div class="card">
+      <h2>📅 ปฏิทินวันพระ</h2>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">วันที่มีกรอบสีทอง = วันพระ &nbsp;|&nbsp; <span style="color:#ef4444;">สีแดง</span> = เสาร์-อาทิตย์ &nbsp;|&nbsp; 🔵 = วันนี้</div>
+      <div id="wanPhraCalendar"></div>
+    </div>
+
     <div class="card" id="userManageCard">
       <h2><i class="ti ti-users"></i> ผู้ใช้งานระบบ</h2>
       <div id="userManageList"></div>
@@ -2571,6 +2577,7 @@ function renderPondsTab(){
 
   renderUserManageList();
   renderActivityLog();
+  renderWanPhraCalendar();
 }
 
 function openPondInfoModal(pondId){
@@ -2642,6 +2649,56 @@ function calcPondInfo(pondId, area){
     card('🟣','ด่างทับทิม',    `พื้นที่ × 1.6 × ความลึก × 5`,     km,       'กก.') +
     card('🟢','คลอรีน',       `พื้นที่ × 1.6 × ความลึก × ${chlFactor}`, chlorine, 'กก.') +
     card('🔵','สีน้ำเทียม',    `พื้นที่ × 3 = ${area} × 3`,        dye,      'ลิตร');
+}
+
+function moonAge(date){
+  const y=date.getFullYear(),m=date.getMonth()+1,d=date.getDate();
+  let Y=y,M=m; if(M<=2){Y--;M+=12;}
+  const A=Math.floor(Y/100),B=2-A+Math.floor(A/4);
+  const jd=Math.floor(365.25*(Y+4716))+Math.floor(30.6001*(M+1))+d+B-1524.5;
+  const cycle=29.53058867;
+  return((jd-2451549.26)%cycle+cycle)%cycle;
+}
+function isWanPhra(date){
+  const age=moonAge(date);
+  return [0,7.38,14.77,22.15].some(q=>{
+    const d=Math.abs(age-q); return d<0.8||d>(29.53-0.8);
+  });
+}
+
+function renderWanPhraCalendar(){
+  const wrap=document.getElementById('wanPhraCalendar');
+  if(!wrap) return;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const yr=today.getFullYear(), cm=today.getMonth();
+  const MONTHS=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+  const DAYS=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  let html='<div style="display:flex;flex-direction:column;gap:24px;">';
+  for(let mo=cm;mo<12;mo++){
+    const first=new Date(yr,mo,1), last=new Date(yr,mo+1,0);
+    const startDow=first.getDay();
+    html+=`<div>
+      <div style="font-size:14px;font-weight:800;color:var(--primary-dark);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary-light);">${MONTHS[mo]} ${yr+543}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center;">`;
+    DAYS.forEach((d,i)=>{ html+=`<div style="font-size:11px;font-weight:700;padding:4px 0;color:${i===0||i===6?'#ef4444':'var(--text-secondary)'};">${d}</div>`; });
+    for(let i=0;i<startDow;i++) html+='<div></div>';
+    for(let d=1;d<=last.getDate();d++){
+      const dt=new Date(yr,mo,d);
+      const dow=dt.getDay();
+      const isToday=dt.getTime()===today.getTime();
+      const isPast=dt<today;
+      const wanPhra=isWanPhra(dt);
+      const isWeekend=dow===0||dow===6;
+      let bg=isToday?'var(--primary)':'transparent';
+      let color=isToday?'#fff':isPast?'#c8c8c8':isWeekend?'#ef4444':'var(--text)';
+      let border=wanPhra?(isPast?'1.5px solid #d1b84a':'2px solid #f59e0b'):'1.5px solid transparent';
+      let dot=wanPhra&&!isPast?`<div style="width:4px;height:4px;background:#f59e0b;border-radius:50%;margin:1px auto 0;"></div>`:'<div style="height:5px;"></div>';
+      html+=`<div style="border-radius:50%;background:${bg};color:${color};font-size:12px;font-weight:${isToday?800:wanPhra?700:400};border:${border};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 2px;line-height:1.2;">${d}${dot}</div>`;
+    }
+    html+='</div></div>';
+  }
+  html+='</div>';
+  wrap.innerHTML=html;
 }
 
 function addPond(){
