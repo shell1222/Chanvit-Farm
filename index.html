@@ -2648,18 +2648,22 @@ function calcPondInfo(pondId, area){
     card('🔵','สีน้ำเทียม',    dye,      'ลิตร');
 }
 
-function moonAge(date){
-  const y=date.getFullYear(),m=date.getMonth()+1,d=date.getDate();
-  let Y=y,M=m; if(M<=2){Y--;M+=12;}
+function _jd(year,month,day){
+  let Y=year,M=month; if(M<=2){Y--;M+=12;}
   const A=Math.floor(Y/100),B=2-A+Math.floor(A/4);
-  const jd=Math.floor(365.25*(Y+4716))+Math.floor(30.6001*(M+1))+d+B-1524.5;
+  return Math.floor(365.25*(Y+4716))+Math.floor(30.6001*(M+1))+day+B-1524.5;
+}
+function _moonAgeJD(jd){
   const cycle=29.53058867;
   return((jd-2451549.26)%cycle+cycle)%cycle;
 }
 function isWanPhra(date){
-  const age=moonAge(date);
-  return [0,7.38,14.77,22.15].some(q=>{
-    const d=Math.abs(age-q); return d<0.8||d>(29.53-0.8);
+  const jd0=_jd(date.getFullYear(),date.getMonth()+1,date.getDate());
+  const age0=_moonAgeJD(jd0), age1=_moonAgeJD(jd0+1);
+  const quarters=[0,7.38,14.77,22.15];
+  return quarters.some(q=>{
+    if(age1>age0) return q>=age0&&q<age1;
+    return q>=age0||q<age1;
   });
 }
 
