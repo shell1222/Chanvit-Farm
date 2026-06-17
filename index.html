@@ -850,7 +850,11 @@
 
     <div class="card">
       <h2>📅 ปฏิทินวันพระ</h2>
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">วันที่มีกรอบสีทอง = วันพระ &nbsp;|&nbsp; <span style="color:#ef4444;">สีแดง</span> = เสาร์-อาทิตย์ &nbsp;|&nbsp; 🔵 = วันนี้</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fde68a;border:2px solid #f59e0b;font-size:10px;font-weight:700;color:#78350f;">8</span> วันพระ</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="color:#ef4444;font-weight:700;">ส/อา</span> = เสาร์-อาทิตย์</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--primary);font-size:10px;font-weight:700;color:#fff;">17</span> วันนี้</span>
+      </div>
       <div id="wanPhraCalendar"></div>
     </div>
 
@@ -2699,11 +2703,20 @@ function renderWanPhraCalendar(){
       const isPast=dt<today;
       const wanPhra=isWanPhra(dt);
       const isWeekend=dow===0||dow===6;
-      let bg=isToday?'var(--primary)':'transparent';
-      let color=isToday?'#fff':isPast?'#c8c8c8':isWeekend?'#ef4444':'var(--text)';
-      let border=wanPhra?(isPast?'1.5px solid #d1b84a':'2px solid #f59e0b'):'1.5px solid transparent';
-      let dot=wanPhra&&!isPast?`<div style="width:4px;height:4px;background:#f59e0b;border-radius:50%;margin:1px auto 0;"></div>`:'<div style="height:5px;"></div>';
-      html+=`<div style="border-radius:50%;background:${bg};color:${color};font-size:12px;font-weight:${isToday?800:wanPhra?700:400};border:${border};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 2px;line-height:1.2;">${d}${dot}</div>`;
+      let innerStyle, textColor;
+      if(isToday){
+        innerStyle=`background:var(--primary);color:#fff;font-weight:800;box-shadow:0 2px 8px rgba(0,128,96,0.35);`;
+      } else if(wanPhra){
+        if(isPast){
+          innerStyle=`background:#fef3c7;color:#b45309;font-weight:600;border:2px solid #fcd34d;opacity:0.7;`;
+        } else {
+          innerStyle=`background:#fde68a;color:#78350f;font-weight:700;border:2px solid #f59e0b;box-shadow:0 2px 6px rgba(245,158,11,0.3);`;
+        }
+      } else {
+        textColor=isPast?'#ccc':isWeekend?'#ef4444':'var(--text)';
+        innerStyle=`color:${textColor};font-weight:${isWeekend?600:400};`;
+      }
+      html+=`<div style="display:flex;align-items:center;justify-content:center;padding:2px 0;"><div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;${innerStyle}">${d}</div></div>`;
     }
     html+='</div></div>';
   }
