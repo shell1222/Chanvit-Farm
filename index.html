@@ -3160,10 +3160,38 @@ function renderSummaryTab(){
     return sum;
   }, 0);
 
+  const closedEntries = entries.filter(e => e.status.status === 'closed');
+  const totalRevenue = closedEntries.reduce((sum, e) => sum + (parseFloat(e.status.revenue) || 0), 0);
+  const totalCost = closedEntries.reduce((sum, e) => {
+    const c = (STATE.pondCosts2 && STATE.pondCosts2[e.pondId]) || {};
+    const fixed = Object.keys(c).filter(k=>k!=='_custom'&&k!=='_labels').reduce((s,k)=>s+(parseFloat(c[k])||0),0);
+    const custom = (c._custom||[]).reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
+    return sum + fixed + custom;
+  }, 0);
+  const netProfit = totalRevenue - totalCost;
+  const profitColor = netProfit >= 0 ? '#0f6e56' : '#dc2626';
+  const profitLabel = netProfit >= 0 ? '💚 กำไรสุทธิ' : '🔴 ขาดทุนสุทธิ';
+
   const statsEl = document.getElementById('summaryStats');
   statsEl.innerHTML = `
     <div class="stat"><div class="label">บ่อที่ลงแล้ว</div><div class="value">${totalPonds} บ่อ</div></div>
     <div class="stat"><div class="label">ผลผลิตรวม (กก.)</div><div class="value">${totalHarvestKg.toLocaleString('th-TH')}</div></div>
+    <div class="stat" style="grid-column:1/-1;background:linear-gradient(135deg,var(--primary-light),#d1fae5);border-radius:14px;padding:16px 20px;margin-top:4px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">💰 รายได้รวม</div>
+          <div style="font-size:16px;font-weight:800;color:#0f6e56;">${totalRevenue > 0 ? totalRevenue.toLocaleString('th-TH')+' บ.' : '-'}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">📋 ต้นทุนรวม</div>
+          <div style="font-size:16px;font-weight:800;color:#854f0b;">${totalCost > 0 ? totalCost.toLocaleString('th-TH')+' บ.' : '-'}</div>
+        </div>
+        <div style="border-left:2px solid #a7f3d0;padding-left:12px;">
+          <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">${profitLabel}</div>
+          <div style="font-size:18px;font-weight:800;color:${profitColor};">${(totalRevenue > 0 || totalCost > 0) ? Math.abs(netProfit).toLocaleString('th-TH')+' บ.' : '-'}</div>
+        </div>
+      </div>
+    </div>
   `;
 
   // ─── Hatchery chart ───
