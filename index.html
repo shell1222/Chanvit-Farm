@@ -540,7 +540,7 @@
   <div class="tab" data-tab="water" onclick="switchTab('water')"><i class="ti ti-droplet"></i> PH / ความโปร่งใส</div>
   <div class="tab" data-tab="growth" onclick="switchTab('growth')"><i class="ti ti-chart-line"></i> สุ่มไซส์กุ้ง</div>
   <div class="tab" data-tab="status" onclick="switchTab('status')"><i class="ti ti-layout-grid"></i> สถานะบ่อ</div>
-  <div class="tab" data-tab="ponds" onclick="switchTab('ponds')"><i class="ti ti-list"></i> จัดการบ่อ</div>
+  <div class="tab" data-tab="ponds" onclick="switchTab('ponds')"><i class="ti ti-list"></i> ข้อมูลบ่อ</div>
   <div class="tab" data-tab="cost" onclick="switchTab('cost')"><i class="ti ti-receipt"></i> บัญชีต้นทุน</div>
   <div class="tab" data-tab="summary" onclick="switchTab('summary')">📊 สรุปปีนี้</div>
 </div>
@@ -831,7 +831,7 @@
   <!-- ============ TAB: PONDS ============ -->
   <div class="tab-content" id="tab-ponds" style="display:none;">
     <div class="card">
-      <h2><i class="ti ti-list"></i> รายการบ่อทั้งหมด</h2>
+      <h2><i class="ti ti-list"></i> ข้อมูลบ่อ</h2>
       <div id="pondManageList"></div>
       <div id="pondAddForm">
         <div class="row2" style="margin-top:12px;">
@@ -1297,7 +1297,7 @@ function logActivity(type, detail){
 
 const TAB_LABELS = {
   feed: 'อาหารประจำวัน', water: 'PH/ความโปร่งใส', growth: 'สุ่มไซส์กุ้ง',
-  ponds: 'จัดการบ่อ', status: 'สถานะบ่อ', cost: 'บัญชีต้นทุน',
+  ponds: 'ข้อมูลบ่อ', status: 'สถานะบ่อ', cost: 'บัญชีต้นทุน',
   history: 'ประวัติการจับ', summary: 'สรุปปีนี้'
 };
 
@@ -2539,20 +2539,28 @@ function removePondCost(idx){
    ============================================================ */
 function renderPondsTab(){
   const wrap = document.getElementById('pondManageList');
-  wrap.innerHTML = '';
-  if(STATE.ponds.length===0){
-    wrap.innerHTML = '<p class="hint">ยังไม่มีบ่อ</p>';
+  const main   = STATE.ponds.filter(p => /^\d/.test(p.id));
+  const treat  = STATE.ponds.filter(p => /^[Tt]/i.test(p.id));
+  const kc     = STATE.ponds.filter(p => /^[Kk]/i.test(p.id));
+
+  function colHtml(title, ponds){
+    if(ponds.length === 0) return `<div><div style="font-size:13px;font-weight:700;color:var(--primary-dark);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--primary-light);">${title}</div><p style="font-size:12px;color:var(--text-secondary);">ยังไม่มีบ่อ</p></div>`;
+    let rows = ponds.map(p=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-radius:8px;background:var(--bg);margin-bottom:4px;">
+        <span style="font-size:13px;font-weight:600;color:var(--text);">บ่อ ${p.id}</span>
+        <span style="font-size:12px;color:var(--text-secondary);">${p.area ? p.area+' ไร่' : '-'}</span>
+      </div>`).join('');
+    return `<div>
+      <div style="font-size:13px;font-weight:700;color:var(--primary-dark);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--primary-light);">${title} <span style="font-size:11px;font-weight:500;color:var(--text-secondary);">(${ponds.length} บ่อ)</span></div>
+      ${rows}
+    </div>`;
   }
-  STATE.ponds.forEach((p,idx)=>{
-    const row = document.createElement('div');
-    row.className = 'pond-row';
-    row.style.gridTemplateColumns = '80px 1fr';
-    row.innerHTML = `
-      <div class="pond-label"><i class="ti ti-circle-filled" style="font-size:8px;color:var(--primary);"></i>บ่อ ${p.id}</div>
-      <div style="font-size:13px;color:var(--text-secondary);">${p.area ? p.area + ' ไร่' : '-'}</div>
-    `;
-    wrap.appendChild(row);
-  });
+
+  wrap.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:4px;">
+    ${colHtml('🐟 บ่อเลี้ยง', main)}
+    ${colHtml('🔄 บ่อทรีท', treat)}
+    ${colHtml('🏷️ บ่อ KC', kc)}
+  </div>`;
 
   renderUserManageList();
   renderActivityLog();
