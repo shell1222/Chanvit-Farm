@@ -976,6 +976,13 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Modal ข้อมูลบ่อ (คำนวณสารเคมี) -->
+<div id="pondInfoModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-box" style="max-width:480px;">
+    <div id="pondInfoContent" style="overflow-y:auto;max-height:88vh;border-radius:16px;padding:20px;"></div>
+  </div>
+</div>
+
 <!-- Modal สรุปรายได้/ต้นทุน/กำไรปีนี้ -->
 <div id="yearlyDetailModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal-box" style="max-width:620px;">
@@ -2539,16 +2546,16 @@ function removePondCost(idx){
    ============================================================ */
 function renderPondsTab(){
   const wrap = document.getElementById('pondManageList');
-  const main   = STATE.ponds.filter(p => /^\d/.test(p.id));
-  const treat  = STATE.ponds.filter(p => /^[Tt]/i.test(p.id));
-  const kc     = STATE.ponds.filter(p => /^[Kk]/i.test(p.id));
+  const main  = STATE.ponds.filter(p => /^\d/.test(p.id));
+  const treat = STATE.ponds.filter(p => /^[Tt]/i.test(p.id));
+  const kc    = STATE.ponds.filter(p => /^[Kk]/i.test(p.id));
 
   function colHtml(title, ponds){
     if(ponds.length === 0) return `<div><div style="font-size:13px;font-weight:700;color:var(--primary-dark);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--primary-light);">${title}</div><p style="font-size:12px;color:var(--text-secondary);">ยังไม่มีบ่อ</p></div>`;
     let rows = ponds.map(p=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-radius:8px;background:var(--bg);margin-bottom:4px;">
-        <span style="font-size:13px;font-weight:600;color:var(--text);">บ่อ ${p.id}</span>
-        <span style="font-size:12px;color:var(--text-secondary);">${p.area ? p.area+' ไร่' : '-'}</span>
+      <div onclick="openPondInfoModal('${p.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:8px;background:var(--bg);margin-bottom:4px;cursor:pointer;border:1px solid transparent;transition:all .15s;" onmouseover="this.style.borderColor='var(--primary-light)';this.style.background='var(--primary-light)'" onmouseout="this.style.borderColor='transparent';this.style.background='var(--bg)'">
+        <span style="font-size:13px;font-weight:600;color:var(--primary);">บ่อ ${p.id}</span>
+        <span style="font-size:12px;color:var(--text-secondary);">${p.area ? p.area+' ไร่' : '-'} <i class="ti ti-chevron-right" style="font-size:11px;"></i></span>
       </div>`).join('');
     return `<div>
       <div style="font-size:13px;font-weight:700;color:var(--primary-dark);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--primary-light);">${title} <span style="font-size:11px;font-weight:500;color:var(--text-secondary);">(${ponds.length} บ่อ)</span></div>
@@ -2564,6 +2571,77 @@ function renderPondsTab(){
 
   renderUserManageList();
   renderActivityLog();
+}
+
+function openPondInfoModal(pondId){
+  const pond = STATE.ponds.find(p => p.id === pondId);
+  if(!pond) return;
+  const area = pond.area || 0;
+  document.getElementById('pondInfoContent').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div>
+        <div style="font-size:18px;font-weight:800;color:var(--primary);">บ่อ ${pondId}</div>
+        <div style="font-size:13px;color:var(--text-secondary);">พื้นที่ ${area ? area+' ไร่' : 'ไม่ระบุ'}</div>
+      </div>
+      <button onclick="document.getElementById('pondInfoModal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-secondary);">✕</button>
+    </div>
+
+    <div style="background:var(--primary-light);border-radius:12px;padding:12px 14px;margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:700;color:var(--primary-dark);margin-bottom:8px;">⚙️ ตั้งค่าการคำนวณ</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px;">ความลึกน้ำ (เมตร)</label>
+          <input type="number" id="piDepth_${pondId}" step="0.1" placeholder="เช่น 1.2" style="width:100%;border:1.5px solid #a7f3d0;border-radius:8px;padding:7px 10px;font-size:14px;background:#fff;box-sizing:border-box;" oninput="calcPondInfo('${pondId}',${area})">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px;">คลอรีน (×5 หรือ ×10)</label>
+          <select id="piChlFactor_${pondId}" style="width:100%;border:1.5px solid #a7f3d0;border-radius:8px;padding:7px 10px;font-size:14px;background:#fff;box-sizing:border-box;" onchange="calcPondInfo('${pondId}',${area})">
+            <option value="5">× 5</option>
+            <option value="10">× 10</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="piResults_${pondId}">
+      <p style="text-align:center;color:var(--text-secondary);font-size:13px;padding:12px 0;">กรอกความลึกน้ำเพื่อคำนวณ</p>
+    </div>`;
+  document.getElementById('pondInfoModal').style.display = 'flex';
+  calcPondInfo(pondId, area);
+}
+
+function calcPondInfo(pondId, area){
+  const depth = parseFloat(document.getElementById('piDepth_'+pondId)?.value) || 0;
+  const chlFactor = parseInt(document.getElementById('piChlFactor_'+pondId)?.value) || 5;
+  const el = document.getElementById('piResults_'+pondId);
+  if(!el) return;
+
+  const copper   = area * 5;
+  const sun      = area * 1;
+  const km       = area > 0 && depth > 0 ? area * 1.6 * depth * 5 : null;
+  const chlorine = area > 0 && depth > 0 ? area * 1.6 * depth * chlFactor : null;
+  const dye      = area * 3;
+
+  function card(icon, name, formula, value, unit){
+    const hasVal = value !== null && area > 0;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:10px;background:var(--bg);border:1px solid var(--border);margin-bottom:8px;">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);">${icon} ${name}</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${formula}</div>
+      </div>
+      <div style="text-align:right;">
+        ${hasVal ? `<div style="font-size:18px;font-weight:800;color:var(--primary);">${value.toLocaleString('th-TH',{maximumFractionDigits:2})}</div><div style="font-size:11px;color:var(--text-secondary);">${unit}</div>`
+                 : `<div style="font-size:13px;color:var(--text-secondary);">${area > 0 ? 'กรอกความลึก' : 'ไม่มีข้อมูลพื้นที่'}</div>`}
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML =
+    card('🔵','คอปเปอร์',     `พื้นที่ × 5 = ${area} × 5`,        copper,   'กก.') +
+    card('🟡','ซันเทอร์แร็กซ์', `พื้นที่ × 1 ถัง = ${area} × 1`,   sun,      'ถัง') +
+    card('🟣','ด่างทับทิม',    `พื้นที่ × 1.6 × ความลึก × 5`,     km,       'กก.') +
+    card('🟢','คลอรีน',       `พื้นที่ × 1.6 × ความลึก × ${chlFactor}`, chlorine, 'กก.') +
+    card('🔵','สีน้ำเทียม',    `พื้นที่ × 3 = ${area} × 3`,        dye,      'ลิตร');
 }
 
 function addPond(){
