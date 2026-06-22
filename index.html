@@ -4398,11 +4398,27 @@ function showFeedChart(pondId){
     for(const r of growthForPond){ if(r.date <= upToDate) m = r.mbw; else break; }
     return m;
   }
-  const labels = records.map(r=>r.date.slice(5));
-  const actual = records.map(r=>r.entries[pondId]);
-  const ceiling = records.map(r=>lookupFeedCeiling(releaseDate, r.date, getEffectivePop(ps, r.date), getLatestMbw(r.date)));
+  const lastRecDate = records[records.length-1].date;
+  const futureDates = [];
+  for(let i=1;i<=5;i++){
+    const d = new Date(lastRecDate+'T00:00:00'); d.setDate(d.getDate()+i);
+    futureDates.push(d.toISOString().slice(0,10));
+  }
+  const splitIdx = records.length;
+  const labels = [
+    ...records.map(r=>r.date.slice(5)),
+    ...futureDates.map(d=>d.slice(5))
+  ];
+  const actual = [
+    ...records.map(r=>r.entries[pondId]),
+    ...futureDates.map(()=>null)
+  ];
+  const ceiling = [
+    ...records.map(r=>lookupFeedCeiling(releaseDate, r.date, getEffectivePop(ps, r.date), getLatestMbw(r.date))),
+    ...futureDates.map(d=>lookupFeedCeiling(releaseDate, d, getEffectivePop(ps, d), getLatestMbw(d)))
+  ];
   const hasCeiling = ceiling.some(v=>v!==null);
-  hint.textContent = `แสดงข้อมูล ${records.length} วันล่าสุด` + (hasCeiling ? '' : ' (ไม่มีข้อมูลวันปล่อย/จำนวนกุ้ง)');
+  hint.textContent = `แสดงข้อมูล ${records.length} วันล่าสุด + พยากรณ์ 5 วันถัดไป` + (hasCeiling ? '' : ' (ไม่มีข้อมูลวันปล่อย/จำนวนกุ้ง)');
 
   // ── stats cards ──
   const statsEl = document.getElementById('feedChartStats');
@@ -4451,7 +4467,17 @@ function showFeedChart(pondId){
     {type:'bar',label:'อาหารที่ให้จริง (กก.)',data:actual,backgroundColor:'#2e7d32',borderRadius:4,order:2}
   ];
   if(hasCeiling){
-    datasets.push({type:'line',label:'เพดานอาหาร (กก.)',data:ceiling,borderColor:'#e53935',backgroundColor:'transparent',borderWidth:2,pointRadius:3,tension:0.3,order:1});
+    datasets.push({
+      type:'line',label:'เพดานอาหาร (กก.)',data:ceiling,
+      borderColor:'#e53935',backgroundColor:'transparent',
+      borderWidth:2,pointRadius:3,tension:0.3,order:1,
+      segment:{
+        borderDash: ctx => ctx.p1DataIndex >= splitIdx ? [6,4] : undefined,
+        borderColor: ctx => ctx.p1DataIndex >= splitIdx ? '#f87171' : '#e53935'
+      },
+      pointBackgroundColor: ceiling.map((_,i)=> i >= splitIdx ? '#f87171' : '#e53935'),
+      pointBorderColor: ceiling.map((_,i)=> i >= splitIdx ? '#f87171' : '#e53935')
+    });
   }
   _feedChart = new Chart(ctx,{
     type:'bar',
