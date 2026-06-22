@@ -1892,14 +1892,14 @@ function loadPondGrowthInfo(){
   }
 
   const ageEl = document.getElementById('growthAge');
-  if(!ageEl.value){
-    const ps = STATE.pondStatus[pondId];
-    if(ps && ps.releaseDate){
-      const rel = new Date(ps.releaseDate + 'T00:00:00');
-      const cur = new Date(growthDate + 'T00:00:00');
-      const diff = Math.round((cur - rel) / 86400000);
-      if(diff > 0) ageEl.value = diff;
-    }
+  const ps2 = STATE.pondStatus[pondId];
+  if(ps2 && ps2.releaseDate){
+    const rel = new Date(ps2.releaseDate + 'T00:00:00');
+    const cur = new Date(growthDate + 'T00:00:00');
+    const diff = Math.round((cur - rel) / 86400000);
+    if(diff > 0) ageEl.value = diff;
+  } else {
+    ageEl.value = '';
   }
 
   calcGrowth();
