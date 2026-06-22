@@ -1382,7 +1382,8 @@ function renderActivityLog(){
 function renderUserList(){
   const list = document.getElementById('userList');
   list.innerHTML = '';
-  const roleUsers = Object.keys(STATE.userRoles || {});
+  STATE.users = (STATE.users || []).filter(u => !u.startsWith('http'));
+  const roleUsers = Object.keys(STATE.userRoles || {}).filter(u => !u.startsWith('http'));
   const allUsers = [...new Set([...(STATE.users || []), ...roleUsers])];
   if(allUsers.length === 0){
     list.innerHTML = '<p class="hint">ยังไม่มีผู้ใช้งาน เพิ่มชื่อด้านล่างเพื่อเริ่มต้น</p>';
