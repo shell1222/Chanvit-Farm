@@ -4349,14 +4349,21 @@ async function init(){
 init();
 
 let _feedChart = null;
-function lookupFeedCeiling(releaseDate, feedDate, population){
-  if(!releaseDate || !population) return null;
-  const ms = new Date(feedDate) - new Date(releaseDate);
-  const age = Math.round(ms / 86400000) + 1;
-  if(age < 1 || age > 147) return null;
-  const row = FEED_TABLE.find(r=>r.age === age);
-  if(!row) return null;
-  return +(row.feedPer100k / 100000 * population).toFixed(2);
+function lookupFeedCeiling(releaseDate, feedDate, population, mbwOverride){
+  if(!population) return null;
+  let feedPer100k;
+  if(mbwOverride != null){
+    feedPer100k = lookupFeedRate(mbwOverride);
+  } else {
+    if(!releaseDate) return null;
+    const ms = new Date(feedDate) - new Date(releaseDate);
+    const age = Math.round(ms / 86400000) + 1;
+    if(age < 1 || age > 147) return null;
+    const row = FEED_TABLE.find(r=>r.age === age);
+    if(!row) return null;
+    feedPer100k = row.feedPer100k;
+  }
+  return +(feedPer100k / 100000 * population).toFixed(2);
 }
 function getEffectivePop(ps, feedDate){
   if(!ps || !ps.population) return null;
@@ -4383,9 +4390,17 @@ function showFeedChart(pondId){
   }
   const ps = STATE.pondStatus[pondId];
   const releaseDate = ps && ps.releaseDate ? ps.releaseDate : null;
+  const growthForPond = (STATE.growthRecords || [])
+    .filter(r => r.pondId === pondId && r.mbw)
+    .sort((a,b) => a.date < b.date ? -1 : 1);
+  function getLatestMbw(upToDate){
+    let m = null;
+    for(const r of growthForPond){ if(r.date <= upToDate) m = r.mbw; else break; }
+    return m;
+  }
   const labels = records.map(r=>r.date.slice(5));
   const actual = records.map(r=>r.entries[pondId]);
-  const ceiling = records.map(r=>lookupFeedCeiling(releaseDate, r.date, getEffectivePop(ps, r.date)));
+  const ceiling = records.map(r=>lookupFeedCeiling(releaseDate, r.date, getEffectivePop(ps, r.date), getLatestMbw(r.date)));
   const hasCeiling = ceiling.some(v=>v!==null);
   hint.textContent = `แสดงข้อมูล ${records.length} วันล่าสุด` + (hasCeiling ? '' : ' (ไม่มีข้อมูลวันปล่อย/จำนวนกุ้ง)');
 
@@ -4406,15 +4421,23 @@ function showFeedChart(pondId){
     </div>`;
   }
 
-  if(releaseDate && effPop){
-    const ms = new Date(today) - new Date(releaseDate);
-    const age = Math.round(ms / 86400000) + 1;
-    const row = FEED_TABLE.find(r=>r.age === age);
-    if(row){
-      const perSaen = row.feedPer100k.toFixed(2);
-      const totalToday = (row.feedPer100k / 100000 * effPop).toFixed(1);
+  if(effPop){
+    const todayMbw = getLatestMbw(today);
+    let feedPer100k = null, labelNote = '';
+    if(todayMbw != null){
+      feedPer100k = lookupFeedRate(todayMbw);
+      labelNote = `MBW ${todayMbw} g.`;
+    } else if(releaseDate){
+      const ms = new Date(today) - new Date(releaseDate);
+      const age = Math.round(ms / 86400000) + 1;
+      const row = FEED_TABLE.find(r=>r.age === age);
+      if(row){ feedPer100k = row.feedPer100k; labelNote = `อายุ ${age} วัน`; }
+    }
+    if(feedPer100k != null){
+      const perSaen = feedPer100k.toFixed(2);
+      const totalToday = (feedPer100k / 100000 * effPop).toFixed(1);
       statsHtml += `<div style="${cardStyle}background:#fefce8;border:1px solid #fde68a;">
-        <div style="font-size:11px;font-weight:600;color:#a16207;margin-bottom:2px;">🍽️ เดินอาหารวันนี้ (อายุ ${age} วัน)</div>
+        <div style="font-size:11px;font-weight:600;color:#a16207;margin-bottom:2px;">🍽️ เดินอาหารวันนี้ (${labelNote})</div>
         <div style="font-size:18px;font-weight:800;color:#92400e;">${totalToday} กก.</div>
         <div style="font-size:11px;color:#b45309;margin-top:1px;">${perSaen} กก./แสน</div>
       </div>`;
