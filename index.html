@@ -624,7 +624,7 @@
       <div class="row2">
         <div class="field">
           <label>วันที่</label>
-          <input type="date" id="growthDate">
+          <input type="date" id="growthDate" oninput="loadPondGrowthInfo()">
         </div>
         <div class="field">
           <label>เลือกบ่อ</label>
@@ -1870,12 +1870,25 @@ function loadPondGrowthInfo(){
   }
 
   const growthDate = document.getElementById('growthDate').value || todayStr();
+
+  // 1) รวมจากแทบอาหารประจำวัน
   let totalFeed = 0;
   STATE.feedRecords.forEach(r=>{
     if(r.date <= growthDate && r.entries && r.entries[pondId] !== undefined)
       totalFeed += parseFloat(r.entries[pondId]) || 0;
   });
-  document.getElementById('accFeed').value = totalFeed > 0 ? Math.round(totalFeed) : '';
+
+  // 2) fallback จากรอบสุ่มก่อนหน้า (ถ้าไม่มีข้อมูลอาหาร)
+  const prevAccFeed = history.length > 0 && history[0].accFeed != null ? history[0].accFeed : null;
+
+  const accFeedEl = document.getElementById('accFeed');
+  if(totalFeed > 0){
+    accFeedEl.value = Math.round(totalFeed);
+  } else if(prevAccFeed != null){
+    accFeedEl.value = prevAccFeed;
+  } else {
+    accFeedEl.value = '';
+  }
 
   const ageEl = document.getElementById('growthAge');
   if(!ageEl.value){
