@@ -4343,6 +4343,16 @@ function lookupFeedCeiling(releaseDate, feedDate, population){
   if(!row) return null;
   return +(row.feedPer100k / 100000 * population).toFixed(2);
 }
+function getEffectivePop(ps, feedDate){
+  if(!ps || !ps.population) return null;
+  let pop = parseFloat(ps.population);
+  if(ps.partial1Date && feedDate >= ps.partial1Date && ps.partial1 && ps.partial1Size)
+    pop -= parseFloat(ps.partial1) * parseFloat(ps.partial1Size);
+  if(ps.partial2Date && feedDate >= ps.partial2Date && ps.partial2 && ps.partial2Size)
+    pop -= parseFloat(ps.partial2) * parseFloat(ps.partial2Size);
+  return pop > 0 ? pop : null;
+}
+
 function showFeedChart(pondId){
   document.getElementById('feedChartTitle').textContent = pondId;
   document.getElementById('feedChartModal').style.display = 'flex';
@@ -4358,10 +4368,9 @@ function showFeedChart(pondId){
   }
   const ps = STATE.pondStatus[pondId];
   const releaseDate = ps && ps.releaseDate ? ps.releaseDate : null;
-  const population = ps && ps.population ? parseFloat(ps.population) : null;
   const labels = records.map(r=>r.date.slice(5));
   const actual = records.map(r=>r.entries[pondId]);
-  const ceiling = records.map(r=>lookupFeedCeiling(releaseDate, r.date, population));
+  const ceiling = records.map(r=>lookupFeedCeiling(releaseDate, r.date, getEffectivePop(ps, r.date)));
   const hasCeiling = ceiling.some(v=>v!==null);
   hint.textContent = `แสดงข้อมูล ${records.length} วันล่าสุด` + (hasCeiling ? '' : ' (ไม่มีข้อมูลวันปล่อย/จำนวนกุ้ง)');
   if(_feedChart) _feedChart.destroy();
