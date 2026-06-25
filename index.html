@@ -3035,14 +3035,14 @@ function openPondSummaryModal(pondId){
     );
   }
 
-  if(isClosed){
+  if(isClosed || s.partial1 || s.partial2){
       const harvests = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
       const totalRev = harvests.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0) || (s.revenue||0);
       const revDisplay = totalRev > 0
         ? `<span style="font-size:18px;font-weight:800;color:var(--primary-dark);">${totalRev.toLocaleString('th-TH')} <span style="font-size:12px;font-weight:500;">บาท</span></span>`
         : `<span style="font-size:12px;color:var(--text-secondary);">ยังไม่ได้กรอก</span>`;
-      const ps = STATE.pondStatus[pondId] || {};
-      const sizeByIdx = [ps.partial1Size, ps.partial2Size, ps.closedSize];
+      const ps2 = STATE.pondStatus[pondId] || {};
+      const sizeByIdx = [ps2.partial1Size, ps2.partial2Size, ps2.closedSize];
       const harvestSummaryRows = harvests.map((h,i)=>{
         const size = sizeByIdx[i];
         const sizeStr = size ? ` · ${size} ตัว/กก.` : '';
