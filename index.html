@@ -4425,6 +4425,7 @@ function showFeedChart(pondId){
   const today = todayStr();
   const effPop = getEffectivePop(ps, today);
   const cardStyle = 'border-radius:10px;padding:10px 14px;';
+  const totalFeed = STATE.feedRecords.reduce((s,r)=>s+((r.entries&&r.entries[pondId]!==undefined)?parseFloat(r.entries[pondId])||0:0),0);
   let statsHtml = '';
 
   if(effPop){
@@ -4460,6 +4461,15 @@ function showFeedChart(pondId){
     }
   }
 
+  if(totalFeed > 0){
+    statsHtml += `<div style="${cardStyle}background:#f0f9ff;border:1px solid #bae6fd;grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:#0369a1;margin-bottom:2px;">📦 อาหารรวมทั้งหมด</div>
+        <div style="font-size:11px;color:#0284c7;margin-top:1px;">ตั้งแต่ต้นจนถึงปัจจุบัน</div>
+      </div>
+      <div style="font-size:22px;font-weight:800;color:#0c4a6e;">${Math.round(totalFeed).toLocaleString('th-TH')} กก.</div>
+    </div>`;
+  }
   statsEl.innerHTML = statsHtml || '';
   if(_feedChart) _feedChart.destroy();
   const ctx = document.getElementById('feedChartCanvas').getContext('2d');
