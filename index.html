@@ -3440,6 +3440,16 @@ function renderSummaryTab(){
   const profitColor = netProfit >= 0 ? '#0f6e56' : '#dc2626';
   const profitLabel = netProfit >= 0 ? '💚 กำไรสุทธิ' : '🔴 ขาดทุนสุทธิ';
 
+  const avgOf = field => {
+    const vals = closedEntries.map(e=>parseFloat(e.status[field])).filter(v=>!isNaN(v)&&v>0);
+    return vals.length ? vals.reduce((s,v)=>s+v,0)/vals.length : null;
+  };
+  const avgMbwFinal = avgOf('mbwFinal');
+  const avgSizeFinal = avgOf('avgSize');
+  const avgYieldRai  = avgOf('yield');
+  const avgFCR       = avgOf('fcr');
+  const avgADG       = avgOf('adg');
+
   const statsEl = document.getElementById('summaryStats');
   const profitBg = netProfit >= 0 ? 'linear-gradient(135deg,#ecfdf5,#d1fae5)' : 'linear-gradient(135deg,#fff1f2,#fee2e2)';
   const profitBorder = netProfit >= 0 ? '#6ee7b7' : '#fca5a5';
@@ -3489,6 +3499,31 @@ function renderSummaryTab(){
       </div>
     </div>
   `;
+
+  if(closedEntries.length > 0 && (avgMbwFinal||avgSizeFinal||avgYieldRai||avgFCR||avgADG)){
+    const fmt = (v,d=1) => v!=null ? v.toFixed(d) : '-';
+    const mc = (icon,label,val,unit,last=false) =>
+      `<div style="padding:12px 8px;text-align:center;flex:1;${last?'':'border-right:1px solid var(--border);'}">
+        <div style="font-size:15px;margin-bottom:2px;">${icon}</div>
+        <div style="font-size:10px;color:var(--text-secondary);font-weight:600;margin-bottom:4px;">${label}</div>
+        <div style="font-size:17px;font-weight:800;color:var(--primary-dark);line-height:1;">${val}</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">${unit}</div>
+      </div>`;
+    statsEl.innerHTML += `
+      <div style="grid-column:1/-1;background:#fff;border-radius:16px;border:1.5px solid var(--border);overflow:hidden;margin-top:8px;box-shadow:0 2px 12px rgba(0,0,0,0.06);">
+        <div style="padding:10px 16px;border-bottom:1px solid var(--border);background:#f8fafc;display:flex;align-items:center;gap:8px;">
+          <span style="font-size:14px;">📊</span>
+          <span style="font-size:12px;font-weight:700;color:var(--text);">ค่าเฉลี่ยจากบ่อที่ปิดแล้ว (${closedEntries.length} บ่อ)</span>
+        </div>
+        <div style="display:flex;">
+          ${mc('⚖️','น้ำหนักกุ้ง',fmt(avgMbwFinal),'g.')}
+          ${mc('📏','ไซส์',fmt(avgSizeFinal,0),'ตัว/กก.')}
+          ${mc('🌾','Yield',fmt(avgYieldRai,0),'กก./ไร่')}
+          ${mc('🔁','FCR',fmt(avgFCR,2),'')}
+          ${mc('📈','ADG',fmt(avgADG,2),'g./วัน',true)}
+        </div>
+      </div>`;
+  }
 
   // ─── Hatchery chart ───
   const hatcheryCount = {};
