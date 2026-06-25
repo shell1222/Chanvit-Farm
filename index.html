@@ -4425,7 +4425,19 @@ function showFeedChart(pondId){
   const today = todayStr();
   const effPop = getEffectivePop(ps, today);
   const cardStyle = 'border-radius:10px;padding:10px 14px;';
-  const totalFeed = STATE.feedRecords.reduce((s,r)=>s+((r.entries&&r.entries[pondId]!==undefined)?parseFloat(r.entries[pondId])||0:0),0);
+  const latestGrowthWithFeed = (STATE.growthRecords||[])
+    .filter(r=>r.pondId===pondId && r.accFeed!=null)
+    .sort((a,b)=>a.date<b.date?1:-1)[0];
+  let totalFeed;
+  if(latestGrowthWithFeed){
+    const base = parseFloat(latestGrowthWithFeed.accFeed)||0;
+    const feedAfter = STATE.feedRecords.reduce((s,r)=>
+      r.date>latestGrowthWithFeed.date&&r.entries&&r.entries[pondId]!==undefined
+        ?s+(parseFloat(r.entries[pondId])||0):s,0);
+    totalFeed = base + feedAfter;
+  } else {
+    totalFeed = STATE.feedRecords.reduce((s,r)=>s+((r.entries&&r.entries[pondId]!==undefined)?parseFloat(r.entries[pondId])||0:0),0);
+  }
   let statsHtml = '';
 
   if(effPop){
