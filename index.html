@@ -2915,27 +2915,48 @@ function openPondSummaryModal(pondId){
 
   html += `<div style="padding:4px 18px 20px;">`;
 
-  // ─── Key stats (closed ponds) ───
-  if(isClosed && (s.total || s.yield || s.doc || s.fcr)){
-    html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:14px 0 4px;">`;
-    if(s.total != null) html += `<div style="background:var(--primary-light);border-radius:12px;padding:10px 8px;text-align:center;">
-      <div style="font-size:11px;color:var(--primary);font-weight:700;">Total</div>
-      <div style="font-size:16px;font-weight:800;color:var(--primary-dark);">${Number(s.total).toLocaleString('th-TH')}</div>
-      <div style="font-size:10px;color:var(--text-secondary);">กก.</div></div>`;
-    if(s.yield != null) html += `<div style="background:#fef3c7;border-radius:12px;padding:10px 8px;text-align:center;">
-      <div style="font-size:11px;color:#92400e;font-weight:700;">Yield</div>
-      <div style="font-size:16px;font-weight:800;color:#78350f;">${Number(s.yield).toLocaleString('th-TH')}</div>
-      <div style="font-size:10px;color:var(--text-secondary);">กก./ไร่</div></div>`;
-    if(s.doc != null) html += `<div style="background:#ede9fe;border-radius:12px;padding:10px 8px;text-align:center;">
-      <div style="font-size:11px;color:#5b21b6;font-weight:700;">DOC</div>
-      <div style="font-size:16px;font-weight:800;color:#4c1d95;">${s.doc}</div>
-      <div style="font-size:10px;color:var(--text-secondary);">วัน</div></div>`;
-    if(s.fcr != null) html += `<div style="background:#fce7f3;border-radius:12px;padding:10px 8px;text-align:center;">
-      <div style="font-size:11px;color:#9d174d;font-weight:700;">FCR</div>
-      <div style="font-size:16px;font-weight:800;color:#831843;">${s.fcr}</div>
-      <div style="font-size:10px;color:var(--text-secondary);">&nbsp;</div></div>`;
-    html += `</div>`;
+  // ─── คำนวณค่าปัจจุบันสำหรับบ่อที่ยังเลี้ยง ───
+  const pondData2 = STATE.ponds.find(p=>p.id===pondId);
+  const pondArea2 = parseFloat(s.area) || (pondData2 && pondData2.area) || 0;
+  const today2 = todayStr();
+  let currentDOC = null;
+  if(s.releaseDate){
+    const _ms = new Date(today2+' 00:00:00') - new Date(s.releaseDate+' 00:00:00');
+    currentDOC = Math.round(_ms / 86400000);
   }
+  const partialHarvestTotal = (parseFloat(s.partial1)||0) + (parseFloat(s.partial2)||0);
+  const latestGrowthRec = (STATE.growthRecords||[])
+    .filter(r=>r.pondId===pondId && r.mbw)
+    .sort((a,b)=>a.date<b.date?1:-1)[0];
+  const currentFCR = latestGrowthRec && latestGrowthRec.accFeed && partialHarvestTotal>0
+    ? (parseFloat(latestGrowthRec.accFeed)/partialHarvestTotal).toFixed(2) : null;
+  const currentYield = partialHarvestTotal>0 && pondArea2>0
+    ? (partialHarvestTotal/pondArea2).toFixed(1) : null;
+  const displayTotal = isClosed ? s.total : (partialHarvestTotal>0 ? partialHarvestTotal : null);
+  const displayYield = isClosed ? s.yield : currentYield;
+  const displayDOC   = isClosed ? s.doc   : currentDOC;
+  const displayFCR   = isClosed ? s.fcr   : currentFCR;
+  const _dash = `<div style="font-size:20px;font-weight:800;color:#cbd5e1;">-</div><div style="font-size:10px;color:var(--text-secondary);">&nbsp;</div>`;
+
+  // ─── Key stats (always) ───
+  html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:14px 0 4px;">
+    <div style="background:var(--primary-light);border-radius:12px;padding:10px 8px;text-align:center;">
+      <div style="font-size:11px;color:var(--primary);font-weight:700;">Total${!isClosed&&partialHarvestTotal>0?' (P)':''}</div>
+      ${displayTotal!=null?`<div style="font-size:16px;font-weight:800;color:var(--primary-dark);">${Number(displayTotal).toLocaleString('th-TH')}</div><div style="font-size:10px;color:var(--text-secondary);">กก.</div>`:_dash}
+    </div>
+    <div style="background:#fef3c7;border-radius:12px;padding:10px 8px;text-align:center;">
+      <div style="font-size:11px;color:#92400e;font-weight:700;">Yield</div>
+      ${displayYield!=null?`<div style="font-size:16px;font-weight:800;color:#78350f;">${Number(displayYield).toLocaleString('th-TH')}</div><div style="font-size:10px;color:var(--text-secondary);">กก./ไร่</div>`:_dash}
+    </div>
+    <div style="background:#ede9fe;border-radius:12px;padding:10px 8px;text-align:center;">
+      <div style="font-size:11px;color:#5b21b6;font-weight:700;">DOC</div>
+      ${displayDOC!=null?`<div style="font-size:16px;font-weight:800;color:#4c1d95;">${displayDOC}</div><div style="font-size:10px;color:var(--text-secondary);">วัน</div>`:_dash}
+    </div>
+    <div style="background:#fce7f3;border-radius:12px;padding:10px 8px;text-align:center;">
+      <div style="font-size:11px;color:#9d174d;font-weight:700;">FCR</div>
+      ${displayFCR!=null?`<div style="font-size:16px;font-weight:800;color:#831843;">${displayFCR}</div><div style="font-size:10px;color:var(--text-secondary);">&nbsp;</div>`:_dash}
+    </div>
+  </div>`;
 
   // ─── ข้อมูลปล่อย ───
   html += sectionHead('🐟', 'ข้อมูลการปล่อยลูกกุ้ง');
@@ -2950,46 +2971,46 @@ function openPondSummaryModal(pondId){
     chip('Salinity', s.sal, 'ppt')
   );
 
-  if(isClosed){
-    // ─── ผลการเลี้ยง ───
-    html += sectionHead('📐', 'ข้อมูลบ่อ', '#185fa5');
-    html += grid2(
-      chip('Area', s.area, 'ไร่'),
-      chip('Density', s.density, 'ตัว/ตร.ม.'),
-      chip('Type', s.shrimpType),
-      chip('MBW เริ่มต้น', s.mbw, 'g.')
-    );
+  // ─── ข้อมูลบ่อ (always) ───
+  html += sectionHead('📐', 'ข้อมูลบ่อ', '#185fa5');
+  html += grid2(
+    chip('Area', pondArea2||null, 'ไร่'),
+    chip('Density', s.density, 'ตัว/ตร.ม.'),
+    chip('Type', isClosed ? s.shrimpType : (s.fromPond||s.shrimpType)),
+    chip('MBW เริ่มต้น', s.mbw, 'g.')
+  );
 
-    // ─── การจับ ───
-    if(s.partial1 || s.partial2 || s.closed){
-      html += sectionHead('🦐', 'การจับ', '#854f0b');
-      html += `<div style="background:var(--warn-light);border-radius:12px;padding:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">`;
-      const catchItems = [
-        {label:'Partial 1', kg:s.partial1, size:s.partial1Size},
-        {label:'Partial 2', kg:s.partial2, size:s.partial2Size},
-        {label:'Closed', kg:s.closed, size:s.closedSize},
-      ];
-      catchItems.forEach(c=>{
-        if(c.kg == null) return;
-        html += `<div>
-          <div style="font-size:11px;font-weight:700;color:var(--warn);margin-bottom:4px;">${c.label}</div>
-          <div style="font-size:18px;font-weight:800;color:var(--warn-dark,#6b3a05);">${Number(c.kg).toLocaleString('th-TH')}</div>
-          <div style="font-size:11px;color:var(--text-secondary);">กก.</div>
-          ${c.size ? `<div style="font-size:12px;margin-top:2px;color:var(--text-secondary);">${c.size} ตัว/กก.</div>` : ''}
-        </div>`;
-      });
-      html += `</div>`;
-      const catchTotal = (s.partial1||0) + (s.partial2||0) + (s.closed||0);
-      if(catchTotal > 0){
-        html += `<div style="margin-top:8px;background:#6b3a05;border-radius:10px;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);">รวมทั้งหมด</span>
-          <span style="font-size:20px;font-weight:800;color:#fff;">${Number(catchTotal).toLocaleString('th-TH')} <span style="font-size:13px;font-weight:500;">กก.</span></span>
-        </div>`;
-      }
+  // ─── การจับ (always - แสดง partial สำหรับบ่อที่ยังเลี้ยงด้วย) ───
+  if(s.partial1 || s.partial2 || s.closed){
+    html += sectionHead('🦐', 'การจับ', '#854f0b');
+    html += `<div style="background:var(--warn-light);border-radius:12px;padding:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">`;
+    const catchItems = [
+      {label:'Partial 1', kg:s.partial1, size:s.partial1Size},
+      {label:'Partial 2', kg:s.partial2, size:s.partial2Size},
+      {label:'Closed', kg:s.closed, size:s.closedSize},
+    ];
+    catchItems.forEach(c=>{
+      if(c.kg == null) return;
+      html += `<div>
+        <div style="font-size:11px;font-weight:700;color:var(--warn);margin-bottom:4px;">${c.label}</div>
+        <div style="font-size:18px;font-weight:800;color:var(--warn-dark,#6b3a05);">${Number(c.kg).toLocaleString('th-TH')}</div>
+        <div style="font-size:11px;color:var(--text-secondary);">กก.</div>
+        ${c.size ? `<div style="font-size:12px;margin-top:2px;color:var(--text-secondary);">${c.size} ตัว/กก.</div>` : ''}
+      </div>`;
+    });
+    html += `</div>`;
+    const catchTotal = (s.partial1||0) + (s.partial2||0) + (s.closed||0);
+    if(catchTotal > 0){
+      html += `<div style="margin-top:8px;background:#6b3a05;border-radius:10px;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);">รวมทั้งหมด</span>
+        <span style="font-size:20px;font-weight:800;color:#fff;">${Number(catchTotal).toLocaleString('th-TH')} <span style="font-size:13px;font-weight:500;">กก.</span></span>
+      </div>`;
     }
+  }
 
-    // ─── ผลสรุป ───
-    html += sectionHead('📊', 'ผลสรุป', 'var(--primary-dark)');
+  // ─── ผลสรุป (always) ───
+  html += sectionHead('📊', 'ผลสรุป', 'var(--primary-dark)');
+  if(isClosed){
     html += grid2(
       chip('Total', s.total != null ? Number(s.total).toLocaleString('th-TH') : null, 'กก.'),
       chip('Acc/F', s.accF != null ? Number(s.accF).toLocaleString('th-TH') : null, 'กก.'),
@@ -3002,8 +3023,19 @@ function openPondSummaryModal(pondId){
       chip('%SR ยอดแถม', s.srBonus != null ? s.srBonus + '%' : null),
       chip('Customer', s.customer)
     );
+  } else {
+    const curSize = latestGrowthRec && latestGrowthRec.mbw ? round2(1000/latestGrowthRec.mbw) : null;
+    html += grid2(
+      chip('MBW ปัจจุบัน', latestGrowthRec ? latestGrowthRec.mbw : null, 'g.'),
+      chip('ไซส์ปัจจุบัน', curSize, 'ตัว/กก.'),
+      chip('ADG', latestGrowthRec ? latestGrowthRec.pdg : null, 'g./วัน'),
+      chip('FCR (partial)', currentFCR),
+      chip('Acc.Feed', latestGrowthRec && latestGrowthRec.accFeed ? Number(latestGrowthRec.accFeed).toLocaleString('th-TH') : null, 'กก.'),
+      chip('Yield (partial)', currentYield, 'กก./ไร่')
+    );
+  }
 
-    if(isClosed){
+  if(isClosed){
       const harvests = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
       const totalRev = harvests.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0) || (s.revenue||0);
       const revDisplay = totalRev > 0
