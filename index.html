@@ -4463,9 +4463,8 @@ function lookupFeedCeiling(releaseDate, feedDate, population, mbwOverride){
 }
 function getEffectivePop(ps, feedDate){
   if(!ps || !ps.population) return null;
-  // If a weekly report was imported, use it for feedDate >= weeklyFeedDate
-  if(ps.weeklyFeedPop && ps.weeklyFeedDate && feedDate >= ps.weeklyFeedDate)
-    return parseFloat(ps.weeklyFeedPop);
+  // Weekly import overrides calculated pop for all chart dates (keeps ceiling line consistent)
+  if(ps.weeklyFeedPop) return parseFloat(ps.weeklyFeedPop);
   let pop = parseFloat(ps.population);
   if(ps.partial1Date && feedDate >= ps.partial1Date && ps.partial1 && ps.partial1Size)
     pop -= parseFloat(ps.partial1) * parseFloat(ps.partial1Size);
