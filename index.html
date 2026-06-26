@@ -4463,6 +4463,9 @@ function lookupFeedCeiling(releaseDate, feedDate, population, mbwOverride){
 }
 function getEffectivePop(ps, feedDate){
   if(!ps || !ps.population) return null;
+  // If a weekly report was imported, use it for feedDate >= weeklyFeedDate
+  if(ps.weeklyFeedPop && ps.weeklyFeedDate && feedDate >= ps.weeklyFeedDate)
+    return parseFloat(ps.weeklyFeedPop);
   let pop = parseFloat(ps.population);
   if(ps.partial1Date && feedDate >= ps.partial1Date && ps.partial1 && ps.partial1Size)
     pop -= parseFloat(ps.partial1) * parseFloat(ps.partial1Size);
@@ -4539,10 +4542,13 @@ function showFeedChart(pondId){
   if(effPop){
     const wan = (effPop / 10000).toFixed(2);
     const saen = (effPop / 100000).toFixed(2);
+    const fromWeekly = ps && ps.weeklyFeedPop && ps.weeklyFeedDate && today >= ps.weeklyFeedDate;
+    const weeklyNote = fromWeekly ? `<div style="font-size:10px;color:#16a34a;margin-top:2px;">📤 จากรายงาน Weekly ${ps.weeklyFeedDate}</div>` : '';
     statsHtml += `<div style="${cardStyle}background:#f0fdf4;border:1px solid #bbf7d0;">
       <div style="font-size:11px;font-weight:600;color:#15803d;margin-bottom:2px;">🦐 กุ้งในบ่อปัจจุบัน</div>
       <div style="font-size:18px;font-weight:800;color:#166534;">${effPop.toLocaleString('th-TH')} ตัว</div>
       <div style="font-size:11px;color:#4ade80;margin-top:1px;">≈ ${saen} แสน / ${wan} หมื่น</div>
+      ${weeklyNote}
     </div>`;
   }
 
@@ -4935,14 +4941,37 @@ function handleExcelImport(input){
         });
       }
 
-      if(rp.length===0&&hp.length===0){
-        showToast('ไม่พบข้อมูล — ไฟล์ต้องมีแท็บชื่อ "แผนการปล่อย" / "แผนการจับ"'); return;
+      // ── หน้าวีคลี่: ยอดกุ้งที่ใช้เดินอาหาร (col F) ──
+      let feedPopCount = 0;
+      const wkSheet = wb.Sheets['หน้าวีคลี่'];
+      if(wkSheet){
+        const wkRows = XLSX.utils.sheet_to_json(wkSheet,{header:1,defval:null});
+        const today2 = new Date().toISOString().slice(0,10);
+        wkRows.forEach(row=>{
+          const pid = row[0];
+          const feedPop = row[5]; // col F = ยอดกุ้งที่ใช้เดินอาหาร
+          if(typeof pid!=='number'||!Number.isInteger(pid)||pid<1) return;
+          if(typeof feedPop!=='number'||feedPop<=0) return;
+          const key = String(pid);
+          if(!STATE.pondStatus[key]) STATE.pondStatus[key]={};
+          STATE.pondStatus[key].weeklyFeedPop = feedPop;
+          STATE.pondStatus[key].weeklyFeedDate = today2;
+          feedPopCount++;
+        });
+      }
+
+      if(rp.length===0&&hp.length===0&&feedPopCount===0){
+        showToast('ไม่พบข้อมูล — ไฟล์ต้องมีแท็บชื่อ "แผนการปล่อย" / "แผนการจับ" / "หน้าวีคลี่"'); return;
       }
       if(rp.length>0) STATE.releasePlan=rp;
       if(hp.length>0) STATE.harvestPlan=hp;
       saveState();
       renderReleasePlanTab(); renderHarvestPlanTab();
-      showToast('✅ นำเข้าแผนปล่อย '+rp.length+' / แผนจับ '+hp.length+' รายการเรียบร้อย');
+      let msg='✅ นำเข้า:';
+      if(feedPopCount>0) msg+=' กุ้งใช้เดินอาหาร '+feedPopCount+' บ่อ';
+      if(rp.length>0) msg+=' · แผนปล่อย '+rp.length;
+      if(hp.length>0) msg+=' · แผนจับ '+hp.length;
+      showToast(msg);
     }catch(err){
       showToast('❌ '+err.message); console.error(err);
     }
