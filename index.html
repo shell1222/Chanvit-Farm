@@ -979,7 +979,12 @@
       <canvas id="hatcheryChart" style="max-height:220px;"></canvas>
     </div>
     <div class="card">
-      <h2>รายการบ่อที่ลงกุ้งปีนี้</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h2 style="margin:0;">รายการบ่อที่ลงกุ้งปีนี้</h2>
+        <button onclick="exportSummaryExcel()" style="display:flex;align-items:center;gap:6px;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(15,110,86,.25);">
+          📥 Export Excel
+        </button>
+      </div>
       <div class="table-wrap" id="summaryTable"></div>
     </div>
   </div>
@@ -4985,6 +4990,218 @@ function _xlDate(val){
   }
   if(typeof val==='string'&&/^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0,10);
   return null;
+}
+
+/* ============================================================
+   EXPORT SUMMARY TO EXCEL (ExcelJS)
+   ============================================================ */
+async function exportSummaryExcel(){
+  if(!window.ExcelJS){
+    showToast('กำลังโหลด ExcelJS...');
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+      s.onload=res; s.onerror=()=>rej(new Error('โหลด ExcelJS ล้มเหลว'));
+      document.head.appendChild(s);
+    }).catch(e=>{showToast('❌ '+e.message); throw e;});
+  }
+  showToast('กำลังสร้างไฟล์...');
+
+  const year=new Date().getFullYear().toString();
+  const beYear=(new Date().getFullYear()+543).toString();
+  const fmtD=d=>{if(!d)return '-';const[y,m,dy]=d.split('-');return `${dy}/${m}/${parseInt(y)+543}`;};
+  const n=v=>(v!=null&&v!=='')?parseFloat(v):null;
+
+  // ── Collect closed ponds ──
+  const entries=[];
+  STATE.ponds.forEach(p=>{
+    const s=STATE.pondStatus[p.id];
+    if(!s||!s.releaseDate||!s.releaseDate.startsWith(year)||s.status!=='closed') return;
+    const costs2=(STATE.pondCosts2&&STATE.pondCosts2[p.id])||{};
+    const totalCost=COST_ITEMS.reduce((sum,it)=>sum+(parseFloat(costs2[it.id])||0),0)
+      +(costs2._custom||[]).reduce((sum,it)=>sum+(parseFloat(it.amount)||0),0);
+    const hvs=(STATE.pondHarvests&&STATE.pondHarvests[p.id])||[];
+    const totalRev=hvs.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0)||(parseFloat(s.revenue)||0);
+    let p1h={},p2h={},clh={};
+    if(s.partial1&&s.partial2){p1h=hvs[0]||{};p2h=hvs[1]||{};clh=hvs[2]||hvs[hvs.length-1]||{};}
+    else if(s.partial1){p1h=hvs[0]||{};clh=hvs[1]||{};}
+    else{clh=hvs[0]||{};}
+    entries.push({pond:p,s,totalCost,totalRev,p1h,p2h,clh});
+  });
+
+  if(!entries.length){showToast('ไม่มีบ่อที่ปิดแล้วในปีนี้');return;}
+
+  // ── Workbook ──
+  const wb=new ExcelJS.Workbook();
+  wb.creator='ชาญวิทย์ฟาร์ม'; wb.created=new Date();
+  const ws=wb.addWorksheet('สรุปผลการเลี้ยง',{
+    pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}
+  });
+
+  const DG='0F6E56',LG='D1FAE5',PG='F0FDF4',RD='DC2626';
+
+  const applyStyle=(cell,{bold,size,color,bg,align,wrap,numFmt,border}={})=>{
+    cell.font={name:'TH SarabunPSK',size:size||11,bold:!!bold,color:{argb:'FF'+(color||'111827')}};
+    if(bg) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
+    cell.alignment={horizontal:align||'left',vertical:'middle',wrapText:!!wrap};
+    if(numFmt) cell.numFmt=numFmt;
+    if(border){
+      const thick=border==='thick';
+      const c={argb:thick?'FF064E3B':'FFB0C4B8'}, st=thick?'medium':'thin';
+      cell.border={top:{style:st,color:c},left:{style:st,color:c},bottom:{style:st,color:c},right:{style:st,color:c}};
+    }
+  };
+
+  const NCOLS=25;
+
+  // ROW 1: Farm name
+  ws.mergeCells(1,1,1,NCOLS);
+  ws.getCell(1,1).value='ชาญวิทย์ฟาร์ม';
+  applyStyle(ws.getCell(1,1),{bold:true,size:20,color:'FFFFFF',bg:DG,align:'center'});
+  ws.getRow(1).height=38;
+
+  // ROW 2: Report title
+  ws.mergeCells(2,1,2,NCOLS);
+  ws.getCell(2,1).value=`สรุปผลการเลี้ยงกุ้ง ปี ${beYear}`;
+  applyStyle(ws.getCell(2,1),{bold:true,size:13,color:'064E3B',bg:LG,align:'center'});
+  ws.getRow(2).height=26;
+
+  // ROW 3: Date
+  ws.mergeCells(3,1,3,NCOLS);
+  const now=new Date();
+  ws.getCell(3,1).value=`วันที่พิมพ์ ${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()+543}   ·   บ่อที่ปิดแล้ว ${entries.length} บ่อ`;
+  applyStyle(ws.getCell(3,1),{size:10,color:'6B7280',bg:'F9FAFB',align:'center'});
+  ws.getRow(3).height=20;
+
+  // ROWS 4-5: KPI summary
+  const totalHv=entries.reduce((s,e)=>s+(n(e.s.total)||0),0);
+  const totalRvAll=entries.reduce((s,e)=>s+e.totalRev,0);
+  const totalCtAll=entries.reduce((s,e)=>s+e.totalCost,0);
+  const netP=totalRvAll-totalCtAll;
+  const kpis=[
+    {lbl:'🐟 บ่อที่ปิดแล้ว',val:`${entries.length} บ่อ`,c:'064E3B'},
+    {lbl:'⚖️ ผลผลิตรวม',val:`${totalHv.toLocaleString('th-TH')} กก.`,c:'1E3A5F'},
+    {lbl:'💰 รายได้รวม',val:`${totalRvAll.toLocaleString('th-TH')} ฿`,c:'065F46'},
+    {lbl:'📈 กำไรสุทธิ',val:`${netP>=0?'+':''}${Math.abs(netP).toLocaleString('th-TH')} ฿`,c:netP>=0?DG:RD},
+  ];
+  const sp=Math.floor(NCOLS/4);
+  kpis.forEach((k,i)=>{
+    const c1=i*sp+1,c2=i===3?NCOLS:c1+sp-1;
+    ws.mergeCells(4,c1,4,c2); ws.mergeCells(5,c1,5,c2);
+    ws.getCell(4,c1).value=k.lbl; applyStyle(ws.getCell(4,c1),{size:10,bold:true,color:'374151',bg:'F3F4F6',align:'center'});
+    ws.getCell(5,c1).value=k.val; applyStyle(ws.getCell(5,c1),{size:14,bold:true,color:k.c,bg:'FFFFFF',align:'center'});
+  });
+  ws.getRow(4).height=20; ws.getRow(5).height=30; ws.getRow(6).height=10;
+
+  // ROW 7: Column headers
+  const HDR=7,DSTART=8;
+  ws.getRow(HDR).height=42;
+  const cols=[
+    {l:'ที่',w:5},{l:'บ่อ',w:7},{l:'พื้นที่\n(ไร่)',w:8},
+    {l:'วันปล่อย',w:13},{l:'วันปิดบ่อ',w:13},{l:'DOC\n(วัน)',w:8},
+    {l:'ประเภทกุ้ง / Hatchery',w:24},
+    {l:'ยอดปล่อย\n(ตัว)',w:13},
+    {l:'Partial 1\n(กก.)',w:11},{l:'P1 Size\n(ตัว/กก.)',w:10},{l:'P1 รายได้\n(฿)',w:13},
+    {l:'Partial 2\n(กก.)',w:11},{l:'P2 Size\n(ตัว/กก.)',w:10},{l:'P2 รายได้\n(฿)',w:13},
+    {l:'ปิดบ่อ\n(กก.)',w:11},{l:'ปิด Size\n(ตัว/กก.)',w:10},{l:'ปิด รายได้\n(฿)',w:13},
+    {l:'รวม\n(กก.)',w:11},{l:'Yield\n(กก./ไร่)',w:11},
+    {l:'FCR',w:8},{l:'MBW\n(g)',w:9},
+    {l:'ต้นทุน\n(฿)',w:15},{l:'รายได้รวม\n(฿)',w:15},
+    {l:'กำไร / ขาดทุน\n(฿)',w:17},{l:'ต้นทุน/กก.\n(฿/กก.)',w:13},
+  ];
+  cols.forEach((c,i)=>{
+    ws.getColumn(i+1).width=c.w;
+    const cell=ws.getCell(HDR,i+1);
+    cell.value=c.l;
+    applyStyle(cell,{bold:true,size:10,color:'FFFFFF',bg:DG,align:'center',wrap:true,border:'thick'});
+  });
+
+  // DATA ROWS
+  entries.forEach((e,idx)=>{
+    const row=DSTART+idx,s=e.s,p=e.pond,bg=idx%2===0?'FFFFFF':PG;
+    ws.getRow(row).height=22;
+    const p1kg=n(s.partial1)||n(e.p1h.kg);
+    const p2kg=n(s.partial2)||n(e.p2h.kg);
+    const clkg=n(s.closed)||n(e.clh.kg);
+    const profit=e.totalRev-e.totalCost;
+    const cpkg=e.totalCost>0&&n(s.total)>0?Math.round(e.totalCost/(n(s.total)||1)):null;
+    const rowData=[
+      {v:idx+1,al:'center'},
+      {v:`บ่อ ${p.id}`,al:'center',bold:true,color:DG},
+      {v:n(p.area),al:'center',fmt:'0.00'},
+      {v:fmtD(s.releaseDate),al:'center'},
+      {v:fmtD(s.closeDate),al:'center'},
+      {v:n(s.doc),al:'center',fmt:'0'},
+      {v:[(s.fromPond||s.shrimpType||''),(s.hatchery||'')].filter(Boolean).join(' · ')||'-',al:'left'},
+      {v:n(s.population),al:'right',fmt:'#,##0'},
+      {v:p1kg,al:'right',fmt:'#,##0.0'},
+      {v:n(s.partial1Size),al:'center',fmt:'0'},
+      {v:n(e.p1h.revenue),al:'right',fmt:'#,##0'},
+      {v:p2kg,al:'right',fmt:'#,##0.0'},
+      {v:n(s.partial2Size),al:'center',fmt:'0'},
+      {v:n(e.p2h.revenue),al:'right',fmt:'#,##0'},
+      {v:clkg,al:'right',fmt:'#,##0.0'},
+      {v:n(s.closedSize),al:'center',fmt:'0'},
+      {v:n(e.clh.revenue),al:'right',fmt:'#,##0'},
+      {v:n(s.total),al:'right',fmt:'#,##0.0'},
+      {v:n(s.yield),al:'right',fmt:'#,##0'},
+      {v:n(s.fcr),al:'center',fmt:'0.000'},
+      {v:n(s.mbwFinal),al:'center',fmt:'0.00'},
+      {v:e.totalCost||null,al:'right',fmt:'#,##0'},
+      {v:e.totalRev||null,al:'right',fmt:'#,##0'},
+      {v:profit,al:'right',fmt:'#,##0',color:profit>=0?DG:RD,bold:true},
+      {v:cpkg,al:'right',fmt:'#,##0'},
+    ];
+    rowData.forEach((d,ci)=>{
+      const cell=ws.getCell(row,ci+1);
+      cell.value=d.v;
+      applyStyle(cell,{bg,align:d.al,numFmt:d.fmt,bold:d.bold,color:d.color,border:'thin'});
+    });
+  });
+
+  // TOTAL ROW
+  const TR=DSTART+entries.length;
+  ws.getRow(TR).height=26;
+  ws.mergeCells(TR,1,TR,7);
+  ws.getCell(TR,1).value='รวมทั้งหมด';
+  applyStyle(ws.getCell(TR,1),{bold:true,size:12,color:'FFFFFF',bg:DG,align:'center',border:'thick'});
+
+  const sumS=f=>entries.reduce((s,e)=>s+(n(e.s[f])||0),0);
+  const grandP=totalRvAll-totalCtAll;
+  const gcpkg=totalCtAll>0&&totalHv>0?Math.round(totalCtAll/totalHv):null;
+  const totV=[null,null,null,null,null,null,null,
+    sumS('population'),
+    sumS('partial1'),null,entries.reduce((s,e)=>s+(n(e.p1h.revenue)||0),0)||null,
+    sumS('partial2'),null,entries.reduce((s,e)=>s+(n(e.p2h.revenue)||0),0)||null,
+    null,null,entries.reduce((s,e)=>s+(n(e.clh.revenue)||0),0)||null,
+    totalHv||null,null,null,null,
+    totalCtAll||null,totalRvAll||null,grandP,gcpkg,
+  ];
+  totV.forEach((v,ci)=>{
+    if(ci<7) return;
+    const cell=ws.getCell(TR,ci+1);
+    cell.value=v;
+    const isProfit=ci===23;
+    applyStyle(cell,{bold:true,size:11,
+      bg:isProfit?(grandP>=0?LG:'FEE2E2'):LG,
+      color:isProfit?(grandP>=0?DG:RD):'064E3B',
+      align:'right',numFmt:'#,##0',border:'thick'
+    });
+  });
+
+  // Freeze & filter
+  ws.views=[{state:'frozen',xSplit:2,ySplit:HDR}];
+  ws.autoFilter={from:{row:HDR,column:1},to:{row:HDR,column:NCOLS}};
+
+  // Download
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`สรุปการเลี้ยงกุ้ง_ปี${beYear}_ชาญวิทย์ฟาร์ม.xlsx`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`✅ Export เรียบร้อย ${entries.length} บ่อ`);
 }
 </script>
 <!-- RELEASE PLAN MODAL -->
