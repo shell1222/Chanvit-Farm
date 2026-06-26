@@ -1003,6 +1003,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<input type="file" id="excelImportInput" accept=".xlsx,.xls" style="display:none" onchange="handleExcelImport(this)">
 
 <!-- Modal ข้อมูลบ่อ (คำนวณสารเคมี) -->
 <div id="pondInfoModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
@@ -4634,11 +4635,14 @@ function renderReleasePlanTab(){
         <div style="font-size:22px;font-weight:800;color:#78350f;">${totalQty.toLocaleString('th-TH')} <span style="font-size:12px;font-weight:500;">ตัว</span></div>
       </div>
     </div>
-    <button onclick="openReleasePlanModal(null)" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">+ เพิ่มแผน</button>
+    <div style="display:flex;gap:8px;">
+      <button onclick="triggerExcelImport()" style="background:#f0fdf4;color:var(--primary-dark);border:1.5px solid #a7f3d0;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;">📤 Import Excel</button>
+      <button onclick="openReleasePlanModal(null)" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">+ เพิ่มแผน</button>
+    </div>
   </div>`;
 
   if(!plan.length){
-    html += `<div style="text-align:center;padding:40px 20px;color:var(--text-secondary);">ยังไม่มีแผนการปล่อย กด <b>+ เพิ่มแผน</b> เพื่อเริ่มต้น</div>`;
+    html += `<div style="text-align:center;padding:40px 20px;color:var(--text-secondary);">ยังไม่มีแผนการปล่อย — กด <b>📤 Import Excel</b> หรือ <b>+ เพิ่มแผน</b></div>`;
     el.innerHTML = html; return;
   }
 
@@ -4766,11 +4770,14 @@ function renderHarvestPlanTab(){
         <div style="font-size:22px;font-weight:800;color:#78350f;">${totalWt.toLocaleString('th-TH')} <span style="font-size:12px;font-weight:500;">กก.</span></div>
       </div>
     </div>
-    <button onclick="openHarvestPlanModal(null)" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">+ เพิ่มแผน</button>
+    <div style="display:flex;gap:8px;">
+      <button onclick="triggerExcelImport()" style="background:#f0fdf4;color:var(--primary-dark);border:1.5px solid #a7f3d0;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;">📤 Import Excel</button>
+      <button onclick="openHarvestPlanModal(null)" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">+ เพิ่มแผน</button>
+    </div>
   </div>`;
 
   if(!plan.length){
-    html += `<div style="text-align:center;padding:40px 20px;color:var(--text-secondary);">ยังไม่มีแผนการจับ กด <b>+ เพิ่มแผน</b> เพื่อเริ่มต้น</div>`;
+    html += `<div style="text-align:center;padding:40px 20px;color:var(--text-secondary);">ยังไม่มีแผนการจับ — กด <b>📤 Import Excel</b> หรือ <b>+ เพิ่มแผน</b></div>`;
     el.innerHTML = html; return;
   }
 
@@ -4861,6 +4868,95 @@ function deleteHarvestPlanEntry(id){
   if(!confirm('ลบรายการนี้?')) return;
   STATE.harvestPlan=(STATE.harvestPlan||[]).filter(r=>r.id!==id);
   saveState(); renderHarvestPlanTab(); showToast('ลบเรียบร้อย');
+}
+
+/* ============================================================
+   IMPORT FROM EXCEL (SheetJS lazy load)
+   ============================================================ */
+function triggerExcelImport(){
+  if(window.XLSX){ _doImport(); return; }
+  showToast('กำลังโหลด SheetJS...');
+  const s=document.createElement('script');
+  s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  s.onload=_doImport;
+  s.onerror=()=>showToast('โหลด SheetJS ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ต');
+  document.head.appendChild(s);
+}
+function _doImport(){
+  const inp=document.getElementById('excelImportInput');
+  inp.value=''; inp.click();
+}
+function handleExcelImport(input){
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      let rp=[], hp=[];
+
+      // ── แผนการปล่อย ──
+      const rpSheet=wb.Sheets['แผนการปล่อย'];
+      if(rpSheet){
+        const rows=XLSX.utils.sheet_to_json(rpSheet,{header:1,defval:null});
+        rows.forEach((row,i)=>{
+          if(typeof row[0]!=='number'||row[0]<1) return;
+          const date=_xlDate(row[4]); if(!date) return;
+          rp.push({
+            id:'rp_imp_'+Date.now()+'_'+i,
+            pondId:String(row[2]),
+            area:typeof row[3]==='number'?row[3]:null,
+            date,
+            qty:parseInt(row[5])||0,
+            salinity:typeof row[6]==='number'?row[6]:null,
+            hatchery:row[7]||'',
+            type:row[8]||'',
+            note:row[9]||''
+          });
+        });
+      }
+
+      // ── แผนการจับ ──
+      const hpSheet=wb.Sheets['แผนการจับ'];
+      if(hpSheet){
+        const rows=XLSX.utils.sheet_to_json(hpSheet,{header:1,defval:null});
+        rows.forEach((row,i)=>{
+          if(typeof row[0]!=='number'||row[0]<1) return;
+          const date=_xlDate(row[4]); if(!date) return;
+          hp.push({
+            id:'hp_imp_'+Date.now()+'_'+i,
+            pondId:String(row[2]),
+            area:typeof row[3]==='number'?row[3]:null,
+            date,
+            size:typeof row[5]==='number'?row[5]:null,
+            weight:parseInt(row[6])||0,
+            type:row[7]||'',
+            note:row[8]||''
+          });
+        });
+      }
+
+      if(rp.length===0&&hp.length===0){
+        showToast('ไม่พบข้อมูล — ไฟล์ต้องมีแท็บชื่อ "แผนการปล่อย" / "แผนการจับ"'); return;
+      }
+      if(rp.length>0) STATE.releasePlan=rp;
+      if(hp.length>0) STATE.harvestPlan=hp;
+      saveState();
+      renderReleasePlanTab(); renderHarvestPlanTab();
+      showToast('✅ นำเข้าแผนปล่อย '+rp.length+' / แผนจับ '+hp.length+' รายการเรียบร้อย');
+    }catch(err){
+      showToast('❌ '+err.message); console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function _xlDate(val){
+  if(!val) return null;
+  if(val instanceof Date){
+    const y=val.getFullYear(), m=String(val.getMonth()+1).padStart(2,'0'), d=String(val.getDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  }
+  if(typeof val==='string'&&/^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0,10);
+  return null;
 }
 </script>
 <!-- RELEASE PLAN MODAL -->
