@@ -4993,7 +4993,7 @@ function _xlDate(val){
 }
 
 /* ============================================================
-   EXPORT SUMMARY TO EXCEL (ExcelJS)
+   EXPORT TO EXCEL — per-pond sheets + overview (ExcelJS)
    ============================================================ */
 async function exportSummaryExcel(){
   if(!window.ExcelJS){
@@ -5003,7 +5003,7 @@ async function exportSummaryExcel(){
       s.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
       s.onload=res; s.onerror=()=>rej(new Error('โหลด ExcelJS ล้มเหลว'));
       document.head.appendChild(s);
-    }).catch(e=>{showToast('❌ '+e.message); throw e;});
+    }).catch(e=>{showToast('❌ '+e.message);throw e;});
   }
   showToast('กำลังสร้างไฟล์...');
 
@@ -5026,174 +5026,387 @@ async function exportSummaryExcel(){
     if(s.partial1&&s.partial2){p1h=hvs[0]||{};p2h=hvs[1]||{};clh=hvs[2]||hvs[hvs.length-1]||{};}
     else if(s.partial1){p1h=hvs[0]||{};clh=hvs[1]||{};}
     else{clh=hvs[0]||{};}
-    entries.push({pond:p,s,totalCost,totalRev,p1h,p2h,clh});
+    entries.push({pond:p,s,costs2,totalCost,totalRev,p1h,p2h,clh});
   });
 
   if(!entries.length){showToast('ไม่มีบ่อที่ปิดแล้วในปีนี้');return;}
 
-  // ── Workbook ──
   const wb=new ExcelJS.Workbook();
   wb.creator='ชาญวิทย์ฟาร์ม'; wb.created=new Date();
-  const ws=wb.addWorksheet('สรุปผลการเลี้ยง',{
-    pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}
-  });
 
-  const DG='0F6E56',LG='D1FAE5',PG='F0FDF4',RD='DC2626';
-
-  const applyStyle=(cell,{bold,size,color,bg,align,wrap,numFmt,border}={})=>{
-    cell.font={name:'TH SarabunPSK',size:size||11,bold:!!bold,color:{argb:'FF'+(color||'111827')}};
+  // ── Helper: apply style ──
+  const DG='0F6E56',LG='D1FAE5',PG='F0FDF4',MG='065F46',RD='DC2626',YL='FFFBEB',AM='92400E';
+  const ST=(cell,{bold,size,color,bg,align,wrap,fmt,border,italic}={})=>{
+    cell.font={name:'TH SarabunPSK',size:size||11,bold:!!bold,italic:!!italic,
+      color:{argb:'FF'+(color||'111827')}};
     if(bg) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+bg}};
     cell.alignment={horizontal:align||'left',vertical:'middle',wrapText:!!wrap};
-    if(numFmt) cell.numFmt=numFmt;
+    if(fmt) cell.numFmt=fmt;
     if(border){
-      const thick=border==='thick';
-      const c={argb:thick?'FF064E3B':'FFB0C4B8'}, st=thick?'medium':'thin';
+      const th=border==='thick';
+      const c={argb:th?'FF'+MG:'FFB8D4C8'},st=th?'medium':'thin';
       cell.border={top:{style:st,color:c},left:{style:st,color:c},bottom:{style:st,color:c},right:{style:st,color:c}};
     }
   };
 
-  const NCOLS=25;
-
-  // ROW 1: Farm name
-  ws.mergeCells(1,1,1,NCOLS);
-  ws.getCell(1,1).value='ชาญวิทย์ฟาร์ม';
-  applyStyle(ws.getCell(1,1),{bold:true,size:20,color:'FFFFFF',bg:DG,align:'center'});
-  ws.getRow(1).height=38;
-
-  // ROW 2: Report title
-  ws.mergeCells(2,1,2,NCOLS);
-  ws.getCell(2,1).value=`สรุปผลการเลี้ยงกุ้ง ปี ${beYear}`;
-  applyStyle(ws.getCell(2,1),{bold:true,size:13,color:'064E3B',bg:LG,align:'center'});
-  ws.getRow(2).height=26;
-
-  // ROW 3: Date
-  ws.mergeCells(3,1,3,NCOLS);
+  // ═══════════════════════════════════════════════════════════
+  //  SHEET 1: สรุปภาพรวม
+  // ═══════════════════════════════════════════════════════════
+  const ws0=wb.addWorksheet('สรุปภาพรวม');
+  ws0.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1};
+  const NC=22;
+  // Title
+  ws0.mergeCells(1,1,1,NC);
+  ws0.getCell(1,1).value='ชาญวิทย์ฟาร์ม — สรุปผลการเลี้ยงกุ้ง ปี '+beYear;
+  ST(ws0.getCell(1,1),{bold:true,size:18,color:'FFFFFF',bg:DG,align:'center'});
+  ws0.getRow(1).height=36;
+  // Subtitle
+  ws0.mergeCells(2,1,2,NC);
   const now=new Date();
-  ws.getCell(3,1).value=`วันที่พิมพ์ ${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()+543}   ·   บ่อที่ปิดแล้ว ${entries.length} บ่อ`;
-  applyStyle(ws.getCell(3,1),{size:10,color:'6B7280',bg:'F9FAFB',align:'center'});
-  ws.getRow(3).height=20;
-
-  // ROWS 4-5: KPI summary
-  const totalHv=entries.reduce((s,e)=>s+(n(e.s.total)||0),0);
+  ws0.getCell(2,1).value=`วันที่พิมพ์ ${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()+543}   ·   บ่อที่ปิด ${entries.length} บ่อ`;
+  ST(ws0.getCell(2,1),{size:10,color:'4B5563',bg:'F9FAFB',align:'center'});
+  ws0.getRow(2).height=20;
+  ws0.getRow(3).height=10;
+  // KPI
+  const totalHvAll=entries.reduce((s,e)=>s+(n(e.s.total)||0),0);
   const totalRvAll=entries.reduce((s,e)=>s+e.totalRev,0);
   const totalCtAll=entries.reduce((s,e)=>s+e.totalCost,0);
   const netP=totalRvAll-totalCtAll;
-  const kpis=[
-    {lbl:'🐟 บ่อที่ปิดแล้ว',val:`${entries.length} บ่อ`,c:'064E3B'},
-    {lbl:'⚖️ ผลผลิตรวม',val:`${totalHv.toLocaleString('th-TH')} กก.`,c:'1E3A5F'},
-    {lbl:'💰 รายได้รวม',val:`${totalRvAll.toLocaleString('th-TH')} ฿`,c:'065F46'},
-    {lbl:'📈 กำไรสุทธิ',val:`${netP>=0?'+':''}${Math.abs(netP).toLocaleString('th-TH')} ฿`,c:netP>=0?DG:RD},
-  ];
-  const sp=Math.floor(NCOLS/4);
-  kpis.forEach((k,i)=>{
-    const c1=i*sp+1,c2=i===3?NCOLS:c1+sp-1;
-    ws.mergeCells(4,c1,4,c2); ws.mergeCells(5,c1,5,c2);
-    ws.getCell(4,c1).value=k.lbl; applyStyle(ws.getCell(4,c1),{size:10,bold:true,color:'374151',bg:'F3F4F6',align:'center'});
-    ws.getCell(5,c1).value=k.val; applyStyle(ws.getCell(5,c1),{size:14,bold:true,color:k.c,bg:'FFFFFF',align:'center'});
+  const sp=Math.floor(NC/4);
+  [
+    {l:'🐟 บ่อที่ปิดแล้ว',v:entries.length+' บ่อ',c:'064E3B'},
+    {l:'⚖️ ผลผลิตรวม',v:totalHvAll.toLocaleString('th-TH')+' กก.',c:'1E3A5F'},
+    {l:'💰 รายได้รวม',v:totalRvAll.toLocaleString('th-TH')+' ฿',c:MG},
+    {l:'📈 กำไรสุทธิ',v:(netP>=0?'+':'')+Math.abs(netP).toLocaleString('th-TH')+' ฿',c:netP>=0?DG:RD},
+  ].forEach((k,i)=>{
+    const c1=i*sp+1,c2=i===3?NC:c1+sp-1;
+    ws0.mergeCells(4,c1,4,c2); ws0.mergeCells(5,c1,5,c2);
+    ws0.getCell(4,c1).value=k.l; ST(ws0.getCell(4,c1),{size:10,bold:true,color:'374151',bg:'F3F4F6',align:'center'});
+    ws0.getCell(5,c1).value=k.v; ST(ws0.getCell(5,c1),{size:14,bold:true,color:k.c,bg:'FFFFFF',align:'center'});
   });
-  ws.getRow(4).height=20; ws.getRow(5).height=30; ws.getRow(6).height=10;
-
-  // ROW 7: Column headers
-  const HDR=7,DSTART=8;
-  ws.getRow(HDR).height=42;
-  const cols=[
-    {l:'ที่',w:5},{l:'บ่อ',w:7},{l:'พื้นที่\n(ไร่)',w:8},
-    {l:'วันปล่อย',w:13},{l:'วันปิดบ่อ',w:13},{l:'DOC\n(วัน)',w:8},
-    {l:'ประเภทกุ้ง / Hatchery',w:24},
-    {l:'ยอดปล่อย\n(ตัว)',w:13},
-    {l:'Partial 1\n(กก.)',w:11},{l:'P1 Size\n(ตัว/กก.)',w:10},{l:'P1 รายได้\n(฿)',w:13},
-    {l:'Partial 2\n(กก.)',w:11},{l:'P2 Size\n(ตัว/กก.)',w:10},{l:'P2 รายได้\n(฿)',w:13},
-    {l:'ปิดบ่อ\n(กก.)',w:11},{l:'ปิด Size\n(ตัว/กก.)',w:10},{l:'ปิด รายได้\n(฿)',w:13},
-    {l:'รวม\n(กก.)',w:11},{l:'Yield\n(กก./ไร่)',w:11},
-    {l:'FCR',w:8},{l:'MBW\n(g)',w:9},
-    {l:'ต้นทุน\n(฿)',w:15},{l:'รายได้รวม\n(฿)',w:15},
-    {l:'กำไร / ขาดทุน\n(฿)',w:17},{l:'ต้นทุน/กก.\n(฿/กก.)',w:13},
+  ws0.getRow(4).height=20; ws0.getRow(5).height=30; ws0.getRow(6).height=10;
+  // Table header
+  const OHR=7,ODST=8;
+  const oc=[
+    {l:'ที่',w:5},{l:'บ่อ',w:7},{l:'พื้นที่(ไร่)',w:10},
+    {l:'วันปล่อย',w:13},{l:'วันปิดบ่อ',w:13},{l:'DOC(วัน)',w:9},
+    {l:'แหล่งลูกกุ้ง',w:20},{l:'ยอดปล่อย(ตัว)',w:14},
+    {l:'P1(กก.)',w:10},{l:'P1 Size',w:9},{l:'P1 รายได้(฿)',w:13},
+    {l:'P2(กก.)',w:10},{l:'P2 Size',w:9},{l:'P2 รายได้(฿)',w:13},
+    {l:'ปิดบ่อ(กก.)',w:12},{l:'ปิด Size',w:9},{l:'ปิด รายได้(฿)',w:14},
+    {l:'รวม(กก.)',w:12},{l:'Yield(/ไร่)',w:11},{l:'FCR',w:8},
+    {l:'ต้นทุน(฿)',w:14},{l:'กำไร/ขาดทุน(฿)',w:16},
   ];
-  cols.forEach((c,i)=>{
-    ws.getColumn(i+1).width=c.w;
-    const cell=ws.getCell(HDR,i+1);
-    cell.value=c.l;
-    applyStyle(cell,{bold:true,size:10,color:'FFFFFF',bg:DG,align:'center',wrap:true,border:'thick'});
-  });
-
-  // DATA ROWS
+  ws0.getRow(OHR).height=36;
+  oc.forEach((c,i)=>{ws0.getColumn(i+1).width=c.w;const cell=ws0.getCell(OHR,i+1);cell.value=c.l;ST(cell,{bold:true,size:10,color:'FFFFFF',bg:DG,align:'center',wrap:true,border:'thick'});});
   entries.forEach((e,idx)=>{
-    const row=DSTART+idx,s=e.s,p=e.pond,bg=idx%2===0?'FFFFFF':PG;
-    ws.getRow(row).height=22;
-    const p1kg=n(s.partial1)||n(e.p1h.kg);
-    const p2kg=n(s.partial2)||n(e.p2h.kg);
-    const clkg=n(s.closed)||n(e.clh.kg);
+    const row=ODST+idx,s=e.s,p=e.pond,bg=idx%2===0?'FFFFFF':PG;
+    ws0.getRow(row).height=20;
     const profit=e.totalRev-e.totalCost;
-    const cpkg=e.totalCost>0&&n(s.total)>0?Math.round(e.totalCost/(n(s.total)||1)):null;
-    const rowData=[
-      {v:idx+1,al:'center'},
-      {v:`บ่อ ${p.id}`,al:'center',bold:true,color:DG},
-      {v:n(p.area),al:'center',fmt:'0.00'},
-      {v:fmtD(s.releaseDate),al:'center'},
-      {v:fmtD(s.closeDate),al:'center'},
-      {v:n(s.doc),al:'center',fmt:'0'},
-      {v:[(s.fromPond||s.shrimpType||''),(s.hatchery||'')].filter(Boolean).join(' · ')||'-',al:'left'},
-      {v:n(s.population),al:'right',fmt:'#,##0'},
-      {v:p1kg,al:'right',fmt:'#,##0.0'},
-      {v:n(s.partial1Size),al:'center',fmt:'0'},
-      {v:n(e.p1h.revenue),al:'right',fmt:'#,##0'},
-      {v:p2kg,al:'right',fmt:'#,##0.0'},
-      {v:n(s.partial2Size),al:'center',fmt:'0'},
-      {v:n(e.p2h.revenue),al:'right',fmt:'#,##0'},
-      {v:clkg,al:'right',fmt:'#,##0.0'},
-      {v:n(s.closedSize),al:'center',fmt:'0'},
-      {v:n(e.clh.revenue),al:'right',fmt:'#,##0'},
-      {v:n(s.total),al:'right',fmt:'#,##0.0'},
-      {v:n(s.yield),al:'right',fmt:'#,##0'},
-      {v:n(s.fcr),al:'center',fmt:'0.000'},
-      {v:n(s.mbwFinal),al:'center',fmt:'0.00'},
-      {v:e.totalCost||null,al:'right',fmt:'#,##0'},
-      {v:e.totalRev||null,al:'right',fmt:'#,##0'},
-      {v:profit,al:'right',fmt:'#,##0',color:profit>=0?DG:RD,bold:true},
-      {v:cpkg,al:'right',fmt:'#,##0'},
+    const rd=[
+      {v:idx+1,a:'center'},{v:'บ่อ '+p.id,a:'center',bo:true,co:DG},
+      {v:n(p.area),a:'center',f:'0.0'},
+      {v:fmtD(s.releaseDate),a:'center'},{v:fmtD(s.closeDate),a:'center'},
+      {v:n(s.doc),a:'center',f:'0'},
+      {v:[(s.fromPond||s.shrimpType||''),(s.hatchery||'')].filter(Boolean).join(' · ')||'-'},
+      {v:n(s.population),a:'right',f:'#,##0'},
+      {v:n(s.partial1),a:'right',f:'#,##0.0'},{v:n(s.partial1Size),a:'center',f:'0'},
+      {v:n(e.p1h.revenue),a:'right',f:'#,##0'},
+      {v:n(s.partial2),a:'right',f:'#,##0.0'},{v:n(s.partial2Size),a:'center',f:'0'},
+      {v:n(e.p2h.revenue),a:'right',f:'#,##0'},
+      {v:n(s.closed),a:'right',f:'#,##0.0'},{v:n(s.closedSize),a:'center',f:'0'},
+      {v:n(e.clh.revenue),a:'right',f:'#,##0'},
+      {v:n(s.total),a:'right',f:'#,##0.0'},{v:n(s.yield),a:'right',f:'#,##0'},
+      {v:n(s.fcr),a:'center',f:'0.000'},
+      {v:e.totalCost||null,a:'right',f:'#,##0'},
+      {v:profit,a:'right',f:'#,##0',bo:true,co:profit>=0?DG:RD},
     ];
-    rowData.forEach((d,ci)=>{
-      const cell=ws.getCell(row,ci+1);
-      cell.value=d.v;
-      applyStyle(cell,{bg,align:d.al,numFmt:d.fmt,bold:d.bold,color:d.color,border:'thin'});
-    });
+    rd.forEach((d,ci)=>{const cell=ws0.getCell(row,ci+1);cell.value=d.v;ST(cell,{bg,align:d.a,fmt:d.f,bold:d.bo,color:d.co,border:'thin'});});
   });
-
-  // TOTAL ROW
-  const TR=DSTART+entries.length;
-  ws.getRow(TR).height=26;
-  ws.mergeCells(TR,1,TR,7);
-  ws.getCell(TR,1).value='รวมทั้งหมด';
-  applyStyle(ws.getCell(TR,1),{bold:true,size:12,color:'FFFFFF',bg:DG,align:'center',border:'thick'});
-
-  const sumS=f=>entries.reduce((s,e)=>s+(n(e.s[f])||0),0);
-  const grandP=totalRvAll-totalCtAll;
-  const gcpkg=totalCtAll>0&&totalHv>0?Math.round(totalCtAll/totalHv):null;
-  const totV=[null,null,null,null,null,null,null,
-    sumS('population'),
-    sumS('partial1'),null,entries.reduce((s,e)=>s+(n(e.p1h.revenue)||0),0)||null,
-    sumS('partial2'),null,entries.reduce((s,e)=>s+(n(e.p2h.revenue)||0),0)||null,
+  // Totals
+  const oTR=ODST+entries.length;
+  ws0.getRow(oTR).height=24;
+  ws0.mergeCells(oTR,1,oTR,7);
+  ws0.getCell(oTR,1).value='รวมทั้งหมด';
+  ST(ws0.getCell(oTR,1),{bold:true,size:12,color:'FFFFFF',bg:DG,align:'center',border:'thick'});
+  const sumF=f=>entries.reduce((s,e)=>s+(n(e.s[f])||0),0);
+  [null,null,null,null,null,null,null,
+    sumF('population'),sumF('partial1'),null,entries.reduce((s,e)=>s+(n(e.p1h.revenue)||0),0)||null,
+    sumF('partial2'),null,entries.reduce((s,e)=>s+(n(e.p2h.revenue)||0),0)||null,
     null,null,entries.reduce((s,e)=>s+(n(e.clh.revenue)||0),0)||null,
-    totalHv||null,null,null,null,
-    totalCtAll||null,totalRvAll||null,grandP,gcpkg,
-  ];
-  totV.forEach((v,ci)=>{
-    if(ci<7) return;
-    const cell=ws.getCell(TR,ci+1);
-    cell.value=v;
-    const isProfit=ci===23;
-    applyStyle(cell,{bold:true,size:11,
-      bg:isProfit?(grandP>=0?LG:'FEE2E2'):LG,
-      color:isProfit?(grandP>=0?DG:RD):'064E3B',
-      align:'right',numFmt:'#,##0',border:'thick'
+    totalHvAll||null,null,null,totalCtAll||null,netP,
+  ].forEach((v,ci)=>{
+    if(ci<7)return;
+    const cell=ws0.getCell(oTR,ci+1);cell.value=v;
+    const ip=ci===21;
+    ST(cell,{bold:true,size:11,bg:ip?(netP>=0?LG:'FEE2E2'):LG,color:ip?(netP>=0?DG:RD):MG,align:'right',fmt:'#,##0',border:'thick'});
+  });
+  ws0.views=[{state:'frozen',xSplit:2,ySplit:OHR}];
+  ws0.autoFilter={from:{row:OHR,column:1},to:{row:OHR,column:NC}};
+
+  // ═══════════════════════════════════════════════════════════
+  //  SHEETS 2+: Per-pond detail
+  // ═══════════════════════════════════════════════════════════
+  entries.forEach(entry=>{
+    const {pond,s,costs2,totalCost,totalRev,p1h,p2h,clh}=entry;
+    const pid=pond.id;
+    const details=(STATE.pondCostDetails&&STATE.pondCostDetails[pid])||[];
+    const chems=details.filter(d=>d.category==='chemical');
+    const feeds=details.filter(d=>d.category==='feed');
+    const grecs=(STATE.growthRecords||[]).filter(r=>r.pondId===pid).sort((a,b)=>a.date<b.date?-1:1);
+    const profit=totalRev-totalCost;
+    const cpkg=totalCost>0&&n(s.total)>0?Math.round(totalCost/(n(s.total)||1)):null;
+
+    const ws=wb.addWorksheet('บ่อ '+pid);
+    ws.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0};
+
+    // Column widths: A-E=items, F=gap, G-J=growth, K=gap, L-N=costs/harvest
+    [5,26,12,9,13, 3, 11,13,11,11, 3, 24,15,12].forEach((w,i)=>ws.getColumn(i+1).width=w);
+
+    // ── HEADER (rows 1-2) ──
+    ws.mergeCells(1,1,1,14);
+    ws.getCell(1,1).value='ชาญวิทย์ฟาร์ม';
+    ST(ws.getCell(1,1),{bold:true,size:20,color:'FFFFFF',bg:DG,align:'center'});
+    ws.getRow(1).height=38;
+
+    ws.mergeCells(2,1,2,5);
+    ws.getCell(2,1).value=`สรุปผลการเลี้ยง บ่อ ${pid}  |  ปี ${beYear}`;
+    ST(ws.getCell(2,1),{bold:true,size:13,color:MG,bg:LG,align:'center'});
+    ws.mergeCells(2,7,2,10);
+    ws.getCell(2,7).value='ตารางอัตราการเติบโต';
+    ST(ws.getCell(2,7),{bold:true,size:13,color:MG,bg:LG,align:'center'});
+    ws.mergeCells(2,12,2,14);
+    ws.getCell(2,12).value='สรุปต้นทุน & รายได้';
+    ST(ws.getCell(2,12),{bold:true,size:13,color:MG,bg:LG,align:'center'});
+    ws.getRow(2).height=26;
+
+    // ── SECTION HEADERS (row 3) ──
+    ws.mergeCells(3,1,3,5);
+    ws.getCell(3,1).value='เคมีภัณฑ์';
+    ST(ws.getCell(3,1),{bold:true,size:11,color:'FFFFFF',bg:DG,align:'center',border:'thick'});
+    ws.mergeCells(3,7,3,10);
+    ws.getCell(3,7).value='ข้อมูลการเติบโต';
+    ST(ws.getCell(3,7),{bold:true,size:11,color:'FFFFFF',bg:DG,align:'center',border:'thick'});
+    ws.mergeCells(3,12,3,14);
+    ws.getCell(3,12).value='รายการค่าใช้จ่าย';
+    ST(ws.getCell(3,12),{bold:true,size:11,color:'FFFFFF',bg:DG,align:'center',border:'thick'});
+    ws.getRow(3).height=22;
+
+    // ── COL HEADERS (row 4) ──
+    const hdrCols_L=['ที่','ชื่อ','ราคา/หน่วย','จำนวน','รวม'];
+    const hdrCols_C=['อายุ(วัน)','ไซส์(ตัว/กก.)','MBW(g)','PDG(g/วัน)'];
+    const hdrCols_R=['รายการ','บาท','บาท/กก.'];
+    hdrCols_L.forEach((l,i)=>{const c=ws.getCell(4,i+1);c.value=l;ST(c,{bold:true,size:10,color:'FFFFFF',bg:'19A37E',align:'center',border:'thin'});});
+    hdrCols_C.forEach((l,i)=>{const c=ws.getCell(4,i+7);c.value=l;ST(c,{bold:true,size:10,color:'FFFFFF',bg:'19A37E',align:'center',border:'thin'});});
+    hdrCols_R.forEach((l,i)=>{const c=ws.getCell(4,i+12);c.value=l;ST(c,{bold:true,size:10,color:'FFFFFF',bg:'19A37E',align:'center',border:'thin'});});
+    ws.getRow(4).height=22;
+
+    // ── LEFT: Chemical items ──
+    let LR=5;
+    const itemBG=(i)=>i%2===0?'FFFFFF':PG;
+    chems.forEach((it,i)=>{
+      ws.getRow(LR).height=18;
+      const row=[i+1,it.name,n(it.priceUnit),n(it.qty),n(it.total)||((n(it.priceUnit)||0)*(n(it.qty)||0))];
+      row.forEach((v,ci)=>{
+        const cell=ws.getCell(LR,ci+1);cell.value=v;
+        ST(cell,{bg:itemBG(i),align:ci>1?'right':'left',fmt:ci>1?'#,##0':'',border:'thin'});
+      });
+      LR++;
     });
+    // Chem subtotal
+    if(chems.length){
+      const chemTotal=costs2.chemical||(chems.reduce((s,it)=>s+(n(it.total)||0),0));
+      ws.mergeCells(LR,1,LR,4);
+      ws.getCell(LR,1).value='รวมเคมีภัณฑ์';
+      ST(ws.getCell(LR,1),{bold:true,size:11,color:MG,bg:LG,align:'right',border:'thin'});
+      ws.getCell(LR,5).value=chemTotal;
+      ST(ws.getCell(LR,5),{bold:true,color:MG,bg:LG,align:'right',fmt:'#,##0',border:'thin'});
+      LR++;
+    }
+
+    // Feed section header
+    ws.mergeCells(LR,1,LR,5);
+    ws.getCell(LR,1).value='อาหาร';
+    ST(ws.getCell(LR,1),{bold:true,size:11,color:'FFFFFF',bg:DG,align:'center',border:'thick'});
+    LR++;
+
+    feeds.forEach((it,i)=>{
+      ws.getRow(LR).height=18;
+      const row=[i+1,it.name,n(it.priceUnit),n(it.qty),n(it.total)||((n(it.priceUnit)||0)*(n(it.qty)||0))];
+      row.forEach((v,ci)=>{
+        const cell=ws.getCell(LR,ci+1);cell.value=v;
+        ST(cell,{bg:itemBG(i),align:ci>1?'right':'left',fmt:ci>1?'#,##0':'',border:'thin'});
+      });
+      LR++;
+    });
+    // Feed subtotal
+    if(feeds.length){
+      const feedTotal=costs2.feed||(feeds.reduce((s,it)=>s+(n(it.total)||0),0));
+      ws.mergeCells(LR,1,LR,4);
+      ws.getCell(LR,1).value='รวมอาหาร';
+      ST(ws.getCell(LR,1),{bold:true,size:11,color:AM,bg:YL,align:'right',border:'thin'});
+      ws.getCell(LR,5).value=feedTotal;
+      ST(ws.getCell(LR,5),{bold:true,color:AM,bg:YL,align:'right',fmt:'#,##0',border:'thin'});
+      LR++;
+    }
+
+    // ── CENTER: Growth table ──
+    let CR=5;
+    const avgPDG=grecs.filter(r=>r.pdg!=null).reduce((s,r,_,a)=>s+(parseFloat(r.pdg)||0),0)
+      /(grecs.filter(r=>r.pdg!=null).length||1);
+    grecs.forEach((r,i)=>{
+      ws.getRow(CR).height=18;
+      [r.age||'-',n(r.size),n(r.mbw),n(r.pdg)].forEach((v,ci)=>{
+        const cell=ws.getCell(CR,ci+7);cell.value=v;
+        ST(cell,{bg:itemBG(i),align:'center',fmt:ci>0?'0.00':'',border:'thin'});
+      });
+      CR++;
+    });
+    // PDG average
+    if(grecs.length){
+      ws.mergeCells(CR,7,CR,9);
+      ws.getCell(CR,7).value='PDG เฉลี่ย';
+      ST(ws.getCell(CR,7),{bold:true,italic:true,size:10,color:MG,bg:LG,align:'right',border:'thin'});
+      ws.getCell(CR,10).value=+avgPDG.toFixed(3)||null;
+      ST(ws.getCell(CR,10),{bold:true,color:MG,bg:LG,align:'center',fmt:'0.000',border:'thin'});
+      CR++;
+    }
+    CR++; // spacer
+
+    // Pond info section
+    ws.mergeCells(CR,7,CR,10);
+    ws.getCell(CR,7).value='ข้อมูลบ่อ';
+    ST(ws.getCell(CR,7),{bold:true,size:11,color:'FFFFFF',bg:DG,align:'center',border:'thick'});
+    CR++;
+    const pondInfo=[
+      ['บ่อ',pid],
+      ['พื้นที่บ่อ (ไร่)',n(pond.area),'0.0'],
+      ['วันปล่อยกุ้ง',fmtD(s.releaseDate)],
+      ['จำนวนลูกกุ้งที่ปล่อย (ตัว)',n(s.population),'#,##0'],
+      ['Hatchery / แหล่งลูกกุ้ง',(s.hatchery||s.fromPond||s.shrimpType||'-')],
+      ['ความหนาแน่น (ตัว/ไร่)',pond.area&&s.population?Math.round(s.population/pond.area):null,'#,##0'],
+      ['วันปิดบ่อ',fmtD(s.closeDate)],
+      ['อายุกุ้ง (วัน)',n(s.doc),'0'],
+      ['ผลผลิตรวม (กก.)',n(s.total),'#,##0.0'],
+      ['Yield (กก./ไร่)',n(s.yield),'#,##0'],
+      ['Average Size (ตัว/กก.)',n(s.avgSize),'0'],
+      ['FCR',n(s.fcr),'0.000'],
+      ['ADG (g/วัน)',n(s.adg),'0.00'],
+      ['MBW สุดท้าย (g)',n(s.mbwFinal),'0.00'],
+      ['%SR (อัตรารอด)',n(s.sr)?n(s.sr)/100:null,'0.0%'],
+    ];
+    pondInfo.forEach((row,i)=>{
+      ws.getRow(CR).height=18;
+      ws.mergeCells(CR,7,CR,8);
+      ws.getCell(CR,7).value=row[0];
+      ST(ws.getCell(CR,7),{bg:i%2===0?'F8FFFE':PG,size:10,border:'thin'});
+      ws.mergeCells(CR,9,CR,10);
+      ws.getCell(CR,9).value=row[1];
+      ST(ws.getCell(CR,9),{bg:i%2===0?'F8FFFE':PG,bold:true,color:MG,align:'center',fmt:row[2]||'',border:'thin'});
+      CR++;
+    });
+
+    // ── RIGHT: Cost summary ──
+    let RR=5;
+    const costLabel={
+      postlarva:'ลูกกุ้ง',feed:'อาหาร',chemical:'เคมีภัณฑ์',electricity:'ค่าไฟ',
+      laborPercent:'เปอร์เซ็นต์ลูกน้อง',laborSalary:'เงินเดือนลูกน้อง',
+      fuel:'ค่าน้ำมัน',pipePa:'ค่าท่อ',partial:'ค่าพาเชี่ยล',mudPump:'ค่าฉีดเลน',
+    };
+    COST_ITEMS.forEach((it,i)=>{
+      const amt=parseFloat(costs2[it.id])||0; if(!amt) return;
+      const pKg=n(s.total)>0?Math.round(amt/(n(s.total)||1)):null;
+      ws.getRow(RR).height=18;
+      ws.getCell(RR,12).value=costLabel[it.id]||it.label;
+      ST(ws.getCell(RR,12),{bg:itemBG(i),border:'thin'});
+      ws.getCell(RR,13).value=amt;
+      ST(ws.getCell(RR,13),{bg:itemBG(i),align:'right',fmt:'#,##0',border:'thin'});
+      ws.getCell(RR,14).value=pKg;
+      ST(ws.getCell(RR,14),{bg:itemBG(i),align:'right',fmt:'#,##0',border:'thin'});
+      RR++;
+    });
+    // Custom costs
+    (costs2._custom||[]).forEach((it,i)=>{
+      const amt=parseFloat(it.amount)||0; if(!amt) return;
+      const pKg=n(s.total)>0?Math.round(amt/(n(s.total)||1)):null;
+      ws.getRow(RR).height=18;
+      ws.getCell(RR,12).value=it.name||'อื่นๆ';
+      ST(ws.getCell(RR,12),{bg:PG,border:'thin'});
+      ws.getCell(RR,13).value=amt;
+      ST(ws.getCell(RR,13),{bg:PG,align:'right',fmt:'#,##0',border:'thin'});
+      ws.getCell(RR,14).value=pKg;
+      ST(ws.getCell(RR,14),{bg:PG,align:'right',fmt:'#,##0',border:'thin'});
+      RR++;
+    });
+    // Cost total
+    ws.getCell(RR,12).value='รวมต้นทุน';
+    ST(ws.getCell(RR,12),{bold:true,size:11,color:'FFFFFF',bg:DG,align:'right',border:'thick'});
+    ws.getCell(RR,13).value=totalCost||null;
+    ST(ws.getCell(RR,13),{bold:true,color:'FFFFFF',bg:DG,align:'right',fmt:'#,##0',border:'thick'});
+    ws.getCell(RR,14).value=cpkg;
+    ST(ws.getCell(RR,14),{bold:true,color:'FFFFFF',bg:DG,align:'right',fmt:'#,##0',border:'thick'});
+    RR+=2; // gap
+
+    // ── RIGHT: Harvest sections ──
+    const harvestSection=(label,kg,size,pricePerKg,revenue,pipe)=>{
+      ws.mergeCells(RR,12,RR,14);
+      ws.getCell(RR,12).value=label;
+      ST(ws.getCell(RR,12),{bold:true,size:11,color:'FFFFFF',bg:'19A37E',align:'center',border:'thick'});
+      RR++;
+      const hvRows=[
+        ['น้ำหนัก (กก.)',kg,'#,##0.0'],
+        ['ขนาด (ตัว/กก.)',n(size),'0'],
+        ['ราคา (บาท/กก.)',n(pricePerKg),'#,##0'],
+        ['รายได้ (บาท)',n(revenue),'#,##0'],
+        ['ค่าท่อ (บาท)',n(pipe),'#,##0'],
+      ];
+      hvRows.forEach((r,i)=>{
+        if(r[1]==null&&r[0]!=='รายได้ (บาท)') return;
+        ws.getRow(RR).height=18;
+        ws.getCell(RR,12).value=r[0];
+        ST(ws.getCell(RR,12),{bg:itemBG(i),size:10,border:'thin'});
+        ws.getCell(RR,13).value=r[1];
+        ST(ws.getCell(RR,13),{bg:itemBG(i),bold:r[0].startsWith('ราคา'),color:r[0].startsWith('ราคา')?MG:'111827',align:'right',fmt:r[2],border:'thin'});
+        RR++;
+      });
+    };
+    if(s.partial1){
+      harvestSection('Partial 1',n(s.partial1),s.partial1Size,p1h.price,p1h.revenue,costs2.pipePa);
+    }
+    if(s.partial2){
+      harvestSection('Partial 2',n(s.partial2),s.partial2Size,p2h.price,p2h.revenue,null);
+    }
+    harvestSection('ปิดบ่อ',n(s.closed)||n(s.total),s.closedSize,clh.price,clh.revenue,costs2.pipePa);
+    RR++;
+
+    // ── RIGHT: Profit summary ──
+    ws.mergeCells(RR,12,RR,14);
+    ws.getCell(RR,12).value='สรุปกำไร';
+    ST(ws.getCell(RR,12),{bold:true,size:11,color:'FFFFFF',bg:DG,align:'center',border:'thick'});
+    RR++;
+    const profRows=[
+      ['รายได้รวม (บาท)',totalRev,'#,##0',false],
+      ['ต้นทุน (บาท)',totalCost,'#,##0',false],
+      ['กำไร / ขาดทุน (บาท)',profit,'#,##0',true],
+      ['ต้นทุน/กก. (฿/กก.)',cpkg,'#,##0',false],
+    ];
+    profRows.forEach((r,i)=>{
+      ws.getRow(RR).height=20;
+      ws.getCell(RR,12).value=r[0];
+      ST(ws.getCell(RR,12),{bg:i===2?(profit>=0?LG:'FEE2E2'):PG,bold:r[3],size:i===2?12:11,border:'thick'});
+      ws.mergeCells(RR,13,RR,14);
+      ws.getCell(RR,13).value=r[1];
+      ST(ws.getCell(RR,13),{bold:true,size:i===2?14:12,
+        color:r[3]?(profit>=0?DG:RD):MG,
+        bg:i===2?(profit>=0?LG:'FEE2E2'):PG,
+        align:'right',fmt:r[2],border:'thick'});
+      RR++;
+    });
+
+    ws.views=[{state:'frozen',xSplit:0,ySplit:4}];
   });
 
-  // Freeze & filter
-  ws.views=[{state:'frozen',xSplit:2,ySplit:HDR}];
-  ws.autoFilter={from:{row:HDR,column:1},to:{row:HDR,column:NCOLS}};
-
-  // Download
+  // ── Download ──
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob);
@@ -5201,8 +5414,9 @@ async function exportSummaryExcel(){
   a.href=url; a.download=`สรุปการเลี้ยงกุ้ง_ปี${beYear}_ชาญวิทย์ฟาร์ม.xlsx`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  showToast(`✅ Export เรียบร้อย ${entries.length} บ่อ`);
+  showToast(`✅ Export เรียบร้อย — ภาพรวม + ${entries.length} แท็บบ่อ`);
 }
+
 </script>
 <!-- RELEASE PLAN MODAL -->
 <div id="releasePlanModal" style="display:none;position:fixed;inset:0;z-index:150;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
