@@ -543,6 +543,8 @@
   <div class="tab" data-tab="ponds" onclick="switchTab('ponds')"><i class="ti ti-list"></i> ข้อมูลบ่อ</div>
   <div class="tab" data-tab="cost" onclick="switchTab('cost')"><i class="ti ti-receipt"></i> บัญชีต้นทุน</div>
   <div class="tab" data-tab="summary" onclick="switchTab('summary')">📊 สรุปปีนี้</div>
+  <div class="tab" data-tab="releaseplan" onclick="switchTab('releaseplan')">🐟 แผนปล่อย</div>
+  <div class="tab" data-tab="harvestplan" onclick="switchTab('harvestplan')">🦐 แผนจับ</div>
 </div>
 
 <div class="container">
@@ -982,6 +984,22 @@
     </div>
   </div>
 
+  <!-- ============ TAB: RELEASE PLAN ============ -->
+  <div class="tab-content" id="tab-releaseplan" style="display:none;">
+    <div class="card">
+      <h2>🐟 แผนการปล่อยกุ้ง</h2>
+      <div id="releasePlanContent"></div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: HARVEST PLAN ============ -->
+  <div class="tab-content" id="tab-harvestplan" style="display:none;">
+    <div class="card">
+      <h2>🦐 แผนการจับกุ้ง</h2>
+      <div id="harvestPlanContent"></div>
+    </div>
+  </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1224,6 +1242,8 @@ function applyLoaded(loaded){
   STATE.userRoles = loaded.userRoles || {};
   STATE.pinUsers = loaded.pinUsers || [];
   STATE.userPins = loaded.userPins || {};
+  STATE.releasePlan = loaded.releasePlan || [];
+  STATE.harvestPlan = loaded.harvestPlan || [];
 }
 function resetState(){
   STATE.ponds = DEFAULT_PONDS; STATE.users = []; STATE.pondStatus = {};
@@ -1284,7 +1304,9 @@ async function saveState(){
     activityLog: STATE.activityLog || [],
     userRoles: STATE.userRoles || {},
     pinUsers: STATE.pinUsers || [],
-    userPins: STATE.userPins || {}
+    userPins: STATE.userPins || {},
+    releasePlan: STATE.releasePlan || [],
+    harvestPlan: STATE.harvestPlan || []
   };
   try{
     localStorage.setItem('farm-data', JSON.stringify(payload));
@@ -1316,7 +1338,8 @@ function logActivity(type, detail){
 const TAB_LABELS = {
   feed: 'อาหารประจำวัน', water: 'PH/ความโปร่งใส', growth: 'สุ่มไซส์กุ้ง',
   ponds: 'ข้อมูลบ่อ', status: 'สถานะบ่อ', cost: 'บัญชีต้นทุน',
-  history: 'ประวัติการจับ', summary: 'สรุปปีนี้'
+  history: 'ประวัติการจับ', summary: 'สรุปปีนี้',
+  releaseplan: 'แผนการปล่อย', harvestplan: 'แผนการจับ'
 };
 
 function getUserRole(name){ return (STATE.userRoles && STATE.userRoles[name]) || 'user'; }
@@ -1622,6 +1645,8 @@ function switchTab(name){
   if(name==='cost') renderCostTab();
   if(name==='history') renderHistory();
   if(name==='summary') renderSummaryTab();
+  if(name==='releaseplan') renderReleasePlanTab();
+  if(name==='harvestplan') renderHarvestPlanTab();
   logActivity('เปิดแท็บ', TAB_LABELS[name] || name);
 }
 
@@ -4587,7 +4612,350 @@ function showFeedChart(pondId){
 function closeFeedChart(){
   document.getElementById('feedChartModal').style.display='none';
 }
+
+/* ============================================================
+   RELEASE PLAN TAB
+   ============================================================ */
+function renderReleasePlanTab(){
+  const plan = (STATE.releasePlan||[]).sort((a,b)=>a.date<b.date?-1:1);
+  const today = todayStr();
+  const upcoming = plan.filter(r=>r.date>=today);
+  const totalQty = plan.reduce((s,r)=>s+(parseInt(r.qty)||0),0);
+  const el = document.getElementById('releasePlanContent');
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div style="background:var(--primary-light);border-radius:12px;padding:10px 18px;text-align:center;min-width:90px;">
+        <div style="font-size:11px;color:var(--primary);font-weight:600;">รอปล่อย</div>
+        <div style="font-size:22px;font-weight:800;color:var(--primary-dark);">${upcoming.length} <span style="font-size:12px;font-weight:500;">บ่อ</span></div>
+      </div>
+      <div style="background:#fef3c7;border-radius:12px;padding:10px 18px;text-align:center;min-width:120px;">
+        <div style="font-size:11px;color:#92400e;font-weight:600;">ยอดปล่อยรวม</div>
+        <div style="font-size:22px;font-weight:800;color:#78350f;">${totalQty.toLocaleString('th-TH')} <span style="font-size:12px;font-weight:500;">ตัว</span></div>
+      </div>
+    </div>
+    <button onclick="openReleasePlanModal(null)" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">+ เพิ่มแผน</button>
+  </div>`;
+
+  if(!plan.length){
+    html += `<div style="text-align:center;padding:40px 20px;color:var(--text-secondary);">ยังไม่มีแผนการปล่อย กด <b>+ เพิ่มแผน</b> เพื่อเริ่มต้น</div>`;
+    el.innerHTML = html; return;
+  }
+
+  const groups = planGroupByWeek(plan,'date');
+  html += `<div class="table-wrap"><table class="data-table" style="font-size:13px;">
+    <thead><tr>
+      <th style="width:28px;">#</th><th>บ่อ</th><th>พื้นที่</th>
+      <th>วันที่ปล่อย</th><th>ยอดปล่อย (ตัว)</th>
+      <th>ความเค็ม</th><th>แหล่งลูกกุ้ง</th><th>รูปแบบ</th><th>หมายเหตุ</th><th></th>
+    </tr></thead><tbody>`;
+  let idx=1;
+  for(const g of groups){
+    for(const r of g.items){
+      const past=r.date<today;
+      html += `<tr style="${past?'opacity:0.5;':''}">
+        <td>${idx++}</td>
+        <td style="font-weight:700;">บ่อ ${r.pondId}</td>
+        <td>${r.area?r.area+' ไร่':'-'}</td>
+        <td>${formatDate(r.date)}</td>
+        <td style="font-weight:700;">${Number(r.qty||0).toLocaleString('th-TH')}</td>
+        <td>${r.salinity?r.salinity+' ppt':'-'}</td>
+        <td>${r.hatchery||'-'}</td>
+        <td>${r.type||'-'}</td>
+        <td style="font-size:11px;color:var(--text-secondary);">${r.note||''}</td>
+        <td style="white-space:nowrap;">
+          <button onclick="openReleasePlanModal('${r.id}')" class="icon-btn" title="แก้ไข">✏️</button>
+          <button onclick="deleteReleasePlanEntry('${r.id}')" class="icon-btn" title="ลบ">🗑️</button>
+        </td>
+      </tr>`;
+    }
+    const tot=g.items.reduce((s,r)=>s+(parseInt(r.qty)||0),0);
+    html += `<tr style="background:#f0fdf4;">
+      <td colspan="4" style="text-align:right;font-size:11px;font-weight:700;color:var(--primary-dark);padding-right:12px;">รวม</td>
+      <td style="font-weight:800;color:var(--primary-dark);">${tot.toLocaleString('th-TH')}</td>
+      <td colspan="5"></td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+  el.innerHTML = html;
+}
+
+function planGroupByWeek(items, dateField){
+  if(!items.length) return [];
+  const groups=[], sorted=[...items].sort((a,b)=>a[dateField]<b[dateField]?-1:1);
+  let g={items:[sorted[0]]};
+  for(let i=1;i<sorted.length;i++){
+    const diff=(new Date(sorted[i][dateField])-new Date(g.items[g.items.length-1][dateField]))/86400000;
+    if(diff<=7) g.items.push(sorted[i]);
+    else { groups.push(g); g={items:[sorted[i]]}; }
+  }
+  groups.push(g);
+  return groups;
+}
+
+function openReleasePlanModal(id){
+  const r = id ? (STATE.releasePlan||[]).find(x=>x.id===id) : null;
+  document.getElementById('rpmTitle').textContent = id ? '✏️ แก้ไขแผนการปล่อย' : '🐟 เพิ่มแผนการปล่อยกุ้ง';
+  document.getElementById('rpmId').value = id||'';
+  const sel = document.getElementById('rpmPond');
+  sel.innerHTML = (STATE.ponds||[]).map(p=>`<option value="${p.id}" ${r&&r.pondId==p.id?'selected':''}>${p.id}</option>`).join('');
+  document.getElementById('rpmDate').value = r ? r.date : todayStr();
+  document.getElementById('rpmQty').value = r ? r.qty : '';
+  document.getElementById('rpmSalinity').value = r&&r.salinity!=null ? r.salinity : '';
+  document.getElementById('rpmType').value = r ? (r.type||'') : '';
+  document.getElementById('rpmHatchery').value = r ? (r.hatchery||'') : '';
+  document.getElementById('rpmNote').value = r ? (r.note||'') : '';
+  rpmFillArea();
+  document.getElementById('releasePlanModal').style.display='flex';
+}
+
+function rpmFillArea(){
+  const pid = document.getElementById('rpmPond').value;
+  const p = (STATE.ponds||[]).find(x=>x.id==pid);
+  if(p) document.getElementById('rpmArea').value = p.area||'';
+}
+
+function saveReleasePlanEntry(){
+  const id = document.getElementById('rpmId').value || 'rp_'+Date.now();
+  const pond = document.getElementById('rpmPond').value;
+  const date = document.getElementById('rpmDate').value;
+  const qty  = parseInt(document.getElementById('rpmQty').value)||0;
+  if(!pond||!date||!qty){ showToast('กรุณากรอก บ่อ / วันที่ / ยอดปล่อย'); return; }
+  const entry = {
+    id, pondId: pond,
+    area: parseFloat(document.getElementById('rpmArea').value)||null,
+    date, qty,
+    salinity: parseFloat(document.getElementById('rpmSalinity').value)||null,
+    type: document.getElementById('rpmType').value,
+    hatchery: document.getElementById('rpmHatchery').value,
+    note: document.getElementById('rpmNote').value
+  };
+  if(!STATE.releasePlan) STATE.releasePlan=[];
+  const idx = STATE.releasePlan.findIndex(r=>r.id===id);
+  if(idx>=0) STATE.releasePlan[idx]=entry; else STATE.releasePlan.push(entry);
+  saveState();
+  document.getElementById('releasePlanModal').style.display='none';
+  renderReleasePlanTab();
+  showToast('บันทึกแผนการปล่อยเรียบร้อย');
+}
+
+function deleteReleasePlanEntry(id){
+  if(!confirm('ลบรายการนี้?')) return;
+  STATE.releasePlan=(STATE.releasePlan||[]).filter(r=>r.id!==id);
+  saveState(); renderReleasePlanTab(); showToast('ลบเรียบร้อย');
+}
+
+/* ============================================================
+   HARVEST PLAN TAB
+   ============================================================ */
+function renderHarvestPlanTab(){
+  const plan = (STATE.harvestPlan||[]).sort((a,b)=>a.date<b.date?-1:1);
+  const today = todayStr();
+  const upcoming = plan.filter(r=>r.date>=today);
+  const totalWt = plan.reduce((s,r)=>s+(parseInt(r.weight)||0),0);
+  const el = document.getElementById('harvestPlanContent');
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div style="background:var(--primary-light);border-radius:12px;padding:10px 18px;text-align:center;min-width:90px;">
+        <div style="font-size:11px;color:var(--primary);font-weight:600;">รอจับ</div>
+        <div style="font-size:22px;font-weight:800;color:var(--primary-dark);">${upcoming.length} <span style="font-size:12px;font-weight:500;">รายการ</span></div>
+      </div>
+      <div style="background:#fef3c7;border-radius:12px;padding:10px 18px;text-align:center;min-width:140px;">
+        <div style="font-size:11px;color:#92400e;font-weight:600;">น้ำหนักรวมทั้งแผน</div>
+        <div style="font-size:22px;font-weight:800;color:#78350f;">${totalWt.toLocaleString('th-TH')} <span style="font-size:12px;font-weight:500;">กก.</span></div>
+      </div>
+    </div>
+    <button onclick="openHarvestPlanModal(null)" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">+ เพิ่มแผน</button>
+  </div>`;
+
+  if(!plan.length){
+    html += `<div style="text-align:center;padding:40px 20px;color:var(--text-secondary);">ยังไม่มีแผนการจับ กด <b>+ เพิ่มแผน</b> เพื่อเริ่มต้น</div>`;
+    el.innerHTML = html; return;
+  }
+
+  const TYPE_COLOR = {P1:'#0369a1',P2:'#065f46',P3:'#92400e',Closed:'#7c3aed'};
+  const groups = planGroupByWeek(plan,'date');
+  html += `<div class="table-wrap"><table class="data-table" style="font-size:13px;">
+    <thead><tr>
+      <th style="width:28px;">#</th><th>บ่อ</th><th>พื้นที่</th>
+      <th>วันที่จับ</th><th>ขนาด (ตัว/กก.)</th>
+      <th>น้ำหนัก (กก.)</th><th>ประเภท</th><th>หมายเหตุ</th><th></th>
+    </tr></thead><tbody>`;
+  let idx=1;
+  for(const g of groups){
+    for(const r of g.items){
+      const past=r.date<today;
+      const tc=TYPE_COLOR[r.type]||'#64748b';
+      html += `<tr style="${past?'opacity:0.5;':''}">
+        <td>${idx++}</td>
+        <td style="font-weight:700;">บ่อ ${r.pondId}</td>
+        <td>${r.area?r.area+' ไร่':'-'}</td>
+        <td>${formatDate(r.date)}</td>
+        <td>${r.size||'-'}</td>
+        <td style="font-weight:700;">${Number(r.weight||0).toLocaleString('th-TH')}</td>
+        <td><span style="background:${tc}22;color:${tc};border-radius:6px;padding:2px 9px;font-size:11px;font-weight:700;">${r.type||'-'}</span></td>
+        <td style="font-size:11px;color:var(--text-secondary);">${r.note||''}</td>
+        <td style="white-space:nowrap;">
+          <button onclick="openHarvestPlanModal('${r.id}')" class="icon-btn" title="แก้ไข">✏️</button>
+          <button onclick="deleteHarvestPlanEntry('${r.id}')" class="icon-btn" title="ลบ">🗑️</button>
+        </td>
+      </tr>`;
+    }
+    const tot=g.items.reduce((s,r)=>s+(parseInt(r.weight)||0),0);
+    html += `<tr style="background:#fef9c3;">
+      <td colspan="5" style="text-align:right;font-size:11px;font-weight:700;color:#92400e;padding-right:12px;">Total</td>
+      <td style="font-weight:800;color:#78350f;">${tot.toLocaleString('th-TH')}</td>
+      <td colspan="3"></td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+  el.innerHTML = html;
+}
+
+function openHarvestPlanModal(id){
+  const r = id ? (STATE.harvestPlan||[]).find(x=>x.id===id) : null;
+  document.getElementById('hpmTitle').textContent = id ? '✏️ แก้ไขแผนการจับ' : '🦐 เพิ่มแผนการจับกุ้ง';
+  document.getElementById('hpmId').value = id||'';
+  const sel = document.getElementById('hpmPond');
+  sel.innerHTML = (STATE.ponds||[]).map(p=>`<option value="${p.id}" ${r&&r.pondId==p.id?'selected':''}>${p.id}</option>`).join('');
+  document.getElementById('hpmDate').value = r ? r.date : todayStr();
+  document.getElementById('hpmSize').value = r&&r.size!=null ? r.size : '';
+  document.getElementById('hpmWeight').value = r ? (r.weight||'') : '';
+  document.getElementById('hpmType').value = r ? (r.type||'Closed') : 'Closed';
+  document.getElementById('hpmNote').value = r ? (r.note||'') : '';
+  hpmFillArea();
+  document.getElementById('harvestPlanModal').style.display='flex';
+}
+
+function hpmFillArea(){
+  const pid = document.getElementById('hpmPond').value;
+  const p = (STATE.ponds||[]).find(x=>x.id==pid);
+  if(p) document.getElementById('hpmArea').value = p.area||'';
+}
+
+function saveHarvestPlanEntry(){
+  const id = document.getElementById('hpmId').value || 'hp_'+Date.now();
+  const pond = document.getElementById('hpmPond').value;
+  const date = document.getElementById('hpmDate').value;
+  if(!pond||!date){ showToast('กรุณากรอก บ่อ / วันที่'); return; }
+  const entry = {
+    id, pondId: pond,
+    area: parseFloat(document.getElementById('hpmArea').value)||null,
+    date,
+    size: parseFloat(document.getElementById('hpmSize').value)||null,
+    weight: parseInt(document.getElementById('hpmWeight').value)||0,
+    type: document.getElementById('hpmType').value,
+    note: document.getElementById('hpmNote').value
+  };
+  if(!STATE.harvestPlan) STATE.harvestPlan=[];
+  const idx = STATE.harvestPlan.findIndex(r=>r.id===id);
+  if(idx>=0) STATE.harvestPlan[idx]=entry; else STATE.harvestPlan.push(entry);
+  saveState();
+  document.getElementById('harvestPlanModal').style.display='none';
+  renderHarvestPlanTab();
+  showToast('บันทึกแผนการจับเรียบร้อย');
+}
+
+function deleteHarvestPlanEntry(id){
+  if(!confirm('ลบรายการนี้?')) return;
+  STATE.harvestPlan=(STATE.harvestPlan||[]).filter(r=>r.id!==id);
+  saveState(); renderHarvestPlanTab(); showToast('ลบเรียบร้อย');
+}
 </script>
+<!-- RELEASE PLAN MODAL -->
+<div id="releasePlanModal" style="display:none;position:fixed;inset:0;z-index:150;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:18px;padding:24px;width:92%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.18);">
+    <h3 id="rpmTitle" style="margin:0 0 18px;font-size:17px;color:var(--primary-dark);">🐟 เพิ่มแผนการปล่อยกุ้ง</h3>
+    <input type="hidden" id="rpmId">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="field" style="grid-column:1/-1;">
+        <label>บ่อ *</label>
+        <select id="rpmPond" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;background:#fff;width:100%;" onchange="rpmFillArea()"></select>
+      </div>
+      <div class="field">
+        <label>พื้นที่ (ไร่)</label>
+        <input type="number" id="rpmArea" step="0.1" placeholder="เช่น 2.1" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+      <div class="field">
+        <label>วันที่ปล่อย *</label>
+        <input type="date" id="rpmDate" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>ยอดปล่อย (ตัว) *</label>
+        <input type="number" id="rpmQty" placeholder="เช่น 300000" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+      <div class="field">
+        <label>ความเค็ม (ppt)</label>
+        <input type="number" id="rpmSalinity" step="0.1" placeholder="เช่น 30" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+      <div class="field">
+        <label>รูปแบบลูกกุ้ง</label>
+        <input type="text" id="rpmType" placeholder="Super PL, PL12, PL17..." style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>แหล่งลูกกุ้ง (Hatchery)</label>
+        <input type="text" id="rpmHatchery" placeholder="ชื่อฟาร์มลูกกุ้ง" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>หมายเหตุ</label>
+        <input type="text" id="rpmNote" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:18px;">
+      <button onclick="saveReleasePlanEntry()" style="flex:1;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;">💾 บันทึก</button>
+      <button onclick="document.getElementById('releasePlanModal').style.display='none'" style="background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:12px 16px;font-size:14px;cursor:pointer;">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<!-- HARVEST PLAN MODAL -->
+<div id="harvestPlanModal" style="display:none;position:fixed;inset:0;z-index:150;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:18px;padding:24px;width:92%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.18);">
+    <h3 id="hpmTitle" style="margin:0 0 18px;font-size:17px;color:var(--primary-dark);">🦐 เพิ่มแผนการจับกุ้ง</h3>
+    <input type="hidden" id="hpmId">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="field" style="grid-column:1/-1;">
+        <label>บ่อ *</label>
+        <select id="hpmPond" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;background:#fff;width:100%;" onchange="hpmFillArea()"></select>
+      </div>
+      <div class="field">
+        <label>พื้นที่ (ไร่)</label>
+        <input type="number" id="hpmArea" step="0.1" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+      <div class="field">
+        <label>วันที่จับ *</label>
+        <input type="date" id="hpmDate" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+      <div class="field">
+        <label>ขนาด (ตัว/กก.)</label>
+        <input type="number" id="hpmSize" step="1" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+      <div class="field">
+        <label>น้ำหนักที่จับ (กก.)</label>
+        <input type="number" id="hpmWeight" step="1" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>ประเภทการจับ</label>
+        <select id="hpmType" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;background:#fff;width:100%;">
+          <option value="P1">Partial 1 (P1)</option>
+          <option value="P2">Partial 2 (P2)</option>
+          <option value="P3">Partial 3 (P3)</option>
+          <option value="Closed">Closed (ปิดบ่อ)</option>
+        </select>
+      </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>หมายเหตุ</label>
+        <input type="text" id="hpmNote" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 12px;font-size:14px;font-family:inherit;width:100%;">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:18px;">
+      <button onclick="saveHarvestPlanEntry()" style="flex:1;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;">💾 บันทึก</button>
+      <button onclick="document.getElementById('harvestPlanModal').style.display='none'" style="background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:12px 16px;font-size:14px;cursor:pointer;">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
 <!-- PIN OVERLAY -->
 <div id="pinOverlay" style="display:none;position:fixed;inset:0;z-index:200;background:linear-gradient(160deg,#0a4a38 0%,#083628 100%);flex-direction:column;align-items:center;justify-content:center;">
   <div style="display:flex;flex-direction:column;align-items:center;gap:0;width:100%;max-width:340px;padding:0 24px;">
