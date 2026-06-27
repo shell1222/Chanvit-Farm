@@ -3148,7 +3148,10 @@ function openPondSummaryModal(pondId){
     if(s.status === 'closed'){
       const grandCost = COST_ITEMS.reduce((sum, it) => sum + (parseFloat(costs2[it.id]) || 0), 0)
         + (costs2._custom || []).reduce((sum, it) => sum + (parseFloat(it.amount) || 0), 0);
-      const profit = s.revenue != null ? s.revenue - grandCost : null;
+      // Use revenue from pondHarvests first; fall back to s.revenue
+      const _hvRev = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+      const _totalRev = _hvRev.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0) || (parseFloat(s.revenue)||0);
+      const profit = _totalRev > 0 ? _totalRev - grandCost : null;
       html += `<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px;">
         ${sectionHead('📋', 'สรุปต้นทุน', '#854f0b')}
         <button onclick="closePondSummaryModal();openCostForPond('${pondId}')" style="flex-shrink:0;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px;">✏️ แก้ไขต้นทุน</button>
@@ -3198,7 +3201,9 @@ function openPondSummaryModal(pondId){
         <span style="font-size:16px;font-weight:800;color:var(--warn);">${grandCost.toLocaleString('th-TH')} บาท</span>
       </div></div>`;
 
-      const totalKg = parseFloat(s.total) || 0;
+      const _hvKg = _hvRev.reduce((sum,h)=>sum+(parseFloat(h.kg)||0),0);
+      const _catchKg = (parseFloat(s.partial1)||0)+(parseFloat(s.partial2)||0)+(parseFloat(s.closed)||0);
+      const totalKg = parseFloat(s.total) || _hvKg || _catchKg || 0;
       if(totalKg > 0){
         const costPerKg = grandCost / totalKg;
         const chemCost = parseFloat(costs2['chemical']) || 0;
@@ -3223,7 +3228,7 @@ function openPondSummaryModal(pondId){
         html += `<div style="background:${isProfit ? 'linear-gradient(135deg,#d1fae5,#a7f3d0)' : 'linear-gradient(135deg,#fee2e2,#fecaca)'};border-radius:12px;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;">
           <div>
             <div style="font-size:12px;font-weight:700;color:${isProfit ? '#065f46' : '#991b1b'};">${isProfit ? '📈 กำไรสุทธิ' : '📉 ขาดทุน'}</div>
-            <div style="font-size:11px;color:${isProfit ? '#047857' : '#b91c1c'};margin-top:2px;">รายได้ ${Number(s.revenue).toLocaleString('th-TH')} − ต้นทุน ${grandCost.toLocaleString('th-TH')}</div>
+            <div style="font-size:11px;color:${isProfit ? '#047857' : '#b91c1c'};margin-top:2px;">รายได้ ${_totalRev.toLocaleString('th-TH')} − ต้นทุน ${grandCost.toLocaleString('th-TH')}</div>
           </div>
           <span style="font-size:24px;font-weight:900;color:${isProfit ? '#065f46' : '#991b1b'};">${Math.abs(profit).toLocaleString('th-TH')} <span style="font-size:14px;font-weight:500;">บาท</span></span>
         </div>`;
