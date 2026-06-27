@@ -3298,14 +3298,18 @@ function openPondSummaryEditMode(pondId){
     html += field('MBW เริ่มต้น (g.)', 'mbw', s.mbw, 'number', '0.01');
     html += `</div>`;
 
+    // Pull harvest kg/size from pondHarvests when pondStatus fields are null
+    const _hvEdit = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+    const _hvPart = _hvEdit.filter(h => h.type !== 'close');
+    const _hvClose = _hvEdit.find(h => h.type === 'close');
     html += secHead('🦐', 'การจับ', '#854f0b');
     html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
-    html += field('Partial 1 (กก.)', 'partial1', s.partial1, 'number', '0.01');
-    html += field('Size Partial 1 (ตัว/กก.)', 'partial1Size', s.partial1Size, 'number', '0.01');
-    html += field('Partial 2 (กก.)', 'partial2', s.partial2, 'number', '0.01');
-    html += field('Size Partial 2 (ตัว/กก.)', 'partial2Size', s.partial2Size, 'number', '0.01');
-    html += field('Closed (กก.)', 'closed', s.closed, 'number', '0.01');
-    html += field('Size Closed (ตัว/กก.)', 'closedSize', s.closedSize, 'number', '0.01');
+    html += field('Partial 1 (กก.)', 'partial1', s.partial1 ?? (_hvPart[0] ? parseFloat(_hvPart[0].kg)||null : null), 'number', '0.01');
+    html += field('Size Partial 1 (ตัว/กก.)', 'partial1Size', s.partial1Size ?? (_hvPart[0]?.size||null), 'number', '0.01');
+    html += field('Partial 2 (กก.)', 'partial2', s.partial2 ?? (_hvPart[1] ? parseFloat(_hvPart[1].kg)||null : null), 'number', '0.01');
+    html += field('Size Partial 2 (ตัว/กก.)', 'partial2Size', s.partial2Size ?? (_hvPart[1]?.size||null), 'number', '0.01');
+    html += field('Closed (กก.)', 'closed', s.closed ?? (_hvClose ? parseFloat(_hvClose.kg)||null : null), 'number', '0.01');
+    html += field('Size Closed (ตัว/กก.)', 'closedSize', s.closedSize ?? (_hvClose?.size||null), 'number', '0.01');
     html += `</div>`;
 
     // Auto-compute summary values from raw data for pre-filling
