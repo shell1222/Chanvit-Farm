@@ -2891,6 +2891,13 @@ function saveHarvests(pondId){
   STATE.pondHarvests[pondId] = harvests;
   if(!STATE.pondStatus[pondId]) STATE.pondStatus[pondId] = {};
   STATE.pondStatus[pondId].revenue = total > 0 ? total : null;
+  // Sync kg/size back to pondStatus so partial1/partial2/closed stay in sync
+  const _ps = STATE.pondStatus[pondId];
+  const _partials = harvests.filter(h => h.type !== 'close');
+  const _closeH   = harvests.find(h => h.type === 'close');
+  _ps.partial1 = _partials[0] ? (parseFloat(_partials[0].kg) || null) : null;
+  _ps.partial2 = _partials[1] ? (parseFloat(_partials[1].kg) || null) : null;
+  if(_closeH) _ps.closed = parseFloat(_closeH.kg) || null;
   logActivity('บันทึกรายได้', 'บ่อ '+pondId);
   saveState();
   showToast('✅ บันทึกรายได้แล้ว');
@@ -2963,10 +2970,24 @@ function openPondSummaryModal(pondId){
     ? (parseFloat(latestGrowthRec.accFeed)/partialHarvestTotal).toFixed(2) : null;
   const currentYield = partialHarvestTotal>0 && pondArea2>0
     ? (partialHarvestTotal/pondArea2).toFixed(1) : null;
-  const displayTotal = isClosed ? s.total : (partialHarvestTotal>0 ? partialHarvestTotal : null);
-  const displayYield = isClosed ? s.yield : currentYield;
-  const displayDOC   = isClosed ? s.doc   : currentDOC;
-  const displayFCR   = isClosed ? s.fcr   : currentFCR;
+  let displayTotal, displayYield, displayDOC, displayFCR;
+  if(isClosed){
+    // Auto-calculate from raw data; manual overrides only if explicitly set
+    const hvs2 = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+    const hvKgSum = hvs2.reduce((sum,h)=>sum+(parseFloat(h.kg)||0), 0);
+    const catchKgSum = (parseFloat(s.partial1)||0)+(parseFloat(s.partial2)||0)+(parseFloat(s.closed)||0);
+    displayTotal = s.total ?? (hvKgSum>0 ? hvKgSum : (catchKgSum>0 ? catchKgSum : null));
+    displayDOC = s.doc ?? (s.releaseDate && s.closeDate
+      ? Math.round((new Date(s.closeDate+' 00:00:00')-new Date(s.releaseDate+' 00:00:00'))/86400000) : null);
+    displayYield = s.yield ?? (displayTotal && pondArea2 ? parseFloat((displayTotal/pondArea2).toFixed(1)) : null);
+    const latestAF = latestGrowthRec && latestGrowthRec.accFeed ? parseFloat(latestGrowthRec.accFeed) : null;
+    displayFCR = s.fcr ?? (latestAF && displayTotal ? parseFloat((latestAF/displayTotal).toFixed(2)) : null);
+  } else {
+    displayTotal = partialHarvestTotal>0 ? partialHarvestTotal : null;
+    displayYield = currentYield;
+    displayDOC = currentDOC;
+    displayFCR = currentFCR;
+  }
   const _dash = `<div style="font-size:20px;font-weight:800;color:#cbd5e1;">-</div><div style="font-size:10px;color:var(--text-secondary);">&nbsp;</div>`;
 
   // ─── Key stats (always) ───
@@ -3279,16 +3300,34 @@ function openPondSummaryEditMode(pondId){
     html += field('Size Closed (ตัว/กก.)', 'closedSize', s.closedSize, 'number', '0.01');
     html += `</div>`;
 
-    html += secHead('📊', 'ผลสรุป', 'var(--primary-dark)');
+    // Auto-compute summary values from raw data for pre-filling
+    const _hvs3 = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+    const _hvKg3 = _hvs3.reduce((sum,h)=>sum+(parseFloat(h.kg)||0), 0);
+    const _catchKg3 = (parseFloat(s.partial1)||0)+(parseFloat(s.partial2)||0)+(parseFloat(s.closed)||0);
+    const _pd3 = STATE.ponds.find(p=>p.id===pondId);
+    const _area3 = parseFloat(s.area)||(_pd3&&_pd3.area)||0;
+    const _autoTotal3 = s.total??(_hvKg3>0?_hvKg3:(_catchKg3>0?_catchKg3:null));
+    const _autoDOC3 = s.doc??(s.releaseDate&&s.closeDate
+      ?Math.round((new Date(s.closeDate+' 00:00:00')-new Date(s.releaseDate+' 00:00:00'))/86400000):null);
+    const _autoYield3 = s.yield??(_autoTotal3&&_area3?parseFloat((_autoTotal3/_area3).toFixed(1)):null);
+    const _lgr3 = (STATE.growthRecords||[]).filter(r=>r.pondId===pondId&&r.mbw).sort((a,b)=>a.date<b.date?1:-1)[0];
+    const _laf3 = _lgr3&&_lgr3.accFeed?parseFloat(_lgr3.accFeed):null;
+    const _autoFCR3 = s.fcr??(_laf3&&_autoTotal3?parseFloat((_laf3/_autoTotal3).toFixed(2)):null);
+    const _autoAccF3 = s.accF??(_laf3||null);
+    const _autoADG3 = s.adg??(_lgr3&&_lgr3.pdg?parseFloat(_lgr3.pdg):null);
+    const _autoMBW3 = s.mbwFinal??(_lgr3&&_lgr3.mbw?parseFloat(_lgr3.mbw):null);
+    const _autoSize3 = s.avgSize??(_lgr3&&_lgr3.mbw?parseFloat((1000/_lgr3.mbw).toFixed(1)):null);
+
+    html += secHead('📊', 'ผลสรุป (คำนวณอัตโนมัติ)', 'var(--primary-dark)');
     html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
-    html += field('Total (กก.)', 'total', s.total, 'number', '0.01');
-    html += field('Acc/F (กก.)', 'accF', s.accF, 'number', '0.01');
-    html += field('Yield (กก./ไร่)', 'yield', s.yield, 'number', '0.01');
-    html += field('DOC (วัน)', 'doc', s.doc, 'number');
-    html += field('MBW Final (g.)', 'mbwFinal', s.mbwFinal, 'number', '0.01');
-    html += field('Average of Size (ตัว/กก.)', 'avgSize', s.avgSize, 'number', '0.01');
-    html += field('FCR', 'fcr', s.fcr, 'number', '0.01');
-    html += field('ADG (g./วัน)', 'adg', s.adg, 'number', '0.01');
+    html += field('Total (กก.)', 'total', _autoTotal3, 'number', '0.01');
+    html += field('Acc/F (กก.)', 'accF', _autoAccF3, 'number', '0.01');
+    html += field('Yield (กก./ไร่)', 'yield', _autoYield3, 'number', '0.01');
+    html += field('DOC (วัน)', 'doc', _autoDOC3, 'number');
+    html += field('MBW Final (g.)', 'mbwFinal', _autoMBW3, 'number', '0.01');
+    html += field('Average of Size (ตัว/กก.)', 'avgSize', _autoSize3, 'number', '0.01');
+    html += field('FCR', 'fcr', _autoFCR3, 'number', '0.01');
+    html += field('ADG (g./วัน)', 'adg', _autoADG3, 'number', '0.01');
     html += field('%SR ยอดซื้อ', 'srOrder', s.srOrder, 'number', '0.01');
     html += field('%SR ยอดแถม', 'srBonus', s.srBonus, 'number', '0.01');
     html += field('Customer', 'customer', s.customer);
