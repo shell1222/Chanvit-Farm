@@ -1264,6 +1264,37 @@ function resetState(){
   STATE.pinUsers = [];
   STATE.userPins = {};
 }
+function getActiveTab(){
+  const el = document.querySelector('.tab.active');
+  return el ? el.dataset.tab : 'feed';
+}
+
+function reRenderActiveTab(){
+  const tab = getActiveTab();
+  if(tab==='feed') renderFeedTab();
+  else if(tab==='water') renderWaterTab();
+  else if(tab==='growth') renderGrowthTab();
+  else if(tab==='status') renderPondStatusTab();
+  else if(tab==='ponds') renderPondsTab();
+  else if(tab==='cost') renderCostTab();
+  else if(tab==='summary') renderSummaryTab();
+  else if(tab==='releaseplan') renderReleasePlanTab();
+  else if(tab==='harvestplan') renderHarvestPlanTab();
+}
+
+let _realtimeStarted = false;
+function startRealtimeSync(){
+  if(_realtimeStarted) return;
+  _realtimeStarted = true;
+  db.collection('farms').doc('chanvit').onSnapshot((doc) => {
+    if(!doc.exists) return;
+    applyLoaded(doc.data());
+    reRenderActiveTab();
+  }, (err) => {
+    console.error('Realtime sync error:', err);
+  });
+}
+
 async function loadState(){
   try{
     const doc = await db.collection('farms').doc('chanvit').get();
@@ -4503,6 +4534,7 @@ function deleteProduct(idx){
    ============================================================ */
 async function init(){
   await loadState();
+  startRealtimeSync();
   // one-time: update pond list to new farm layout
   if(!localStorage.getItem('ponds-v2')){
     STATE.ponds = JSON.parse(JSON.stringify(DEFAULT_PONDS));
