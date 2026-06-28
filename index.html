@@ -600,7 +600,7 @@
           <input type="number" step="0.1" id="waterPH" placeholder="เช่น 8.0">
         </div>
         <div class="field">
-          <label>อัลคาไลน์ (mg/L)</label>
+          <label>Alkaline (mg/L)</label>
           <input type="number" step="1" id="waterAlk" placeholder="เช่น 120">
         </div>
       </div>
@@ -1845,7 +1845,7 @@ function renderWaterRecentTable(){
     wrap.innerHTML = `<div class="empty-state"><i class="ti ti-droplet"></i>ยังไม่มีข้อมูลค่าน้ำ</div>`;
     return;
   }
-  let html = '<table><thead><tr><th>วันที่</th><th>ช่วง</th><th>บ่อ</th><th>PH</th><th>Alk</th><th>โปร่งใส (cm.)</th><th>โดย</th><th></th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>วันที่</th><th>ช่วง</th><th>บ่อ</th><th>PH</th><th>Alkaline</th><th>โปร่งใส (cm.)</th><th>โดย</th><th></th></tr></thead><tbody>';
   recent.forEach(r=>{
     const idx = STATE.waterRecords.indexOf(r);
     html += `<tr>
@@ -3796,7 +3796,7 @@ function renderHistory(){
       wrap.innerHTML = `<div class="empty-state"><i class="ti ti-database"></i>ไม่มีข้อมูล</div>`;
       return;
     }
-    let html = '<table><thead><tr><th>วันที่</th><th>ช่วง</th><th>บ่อ</th><th>PH</th><th>Alk</th><th>โปร่งใส</th><th>โดย</th><th></th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>วันที่</th><th>ช่วง</th><th>บ่อ</th><th>PH</th><th>Alkaline</th><th>โปร่งใส</th><th>โดย</th><th></th></tr></thead><tbody>';
     recs.forEach(r=>{
       const idx = STATE.waterRecords.indexOf(r);
       html += `<tr>
