@@ -4550,11 +4550,6 @@ function showFeedChart(pondId){
     .sort((a,b)=>a.date<b.date?-1:1)
     .slice(-30);
   const hint = document.getElementById('feedChartHint');
-  if(records.length === 0){
-    hint.textContent = 'ยังไม่มีข้อมูลอาหารของบ่อนี้';
-    if(_feedChart){ _feedChart.destroy(); _feedChart = null; }
-    return;
-  }
   const ps = STATE.pondStatus[pondId];
   const releaseDate = ps && ps.releaseDate ? ps.releaseDate : null;
   const growthForPond = (STATE.growthRecords || [])
@@ -4564,6 +4559,10 @@ function showFeedChart(pondId){
     let m = null;
     for(const r of growthForPond){ if(r.date <= upToDate) m = r.mbw; else break; }
     return m;
+  }
+  if(records.length === 0){
+    hint.textContent = 'ยังไม่มีข้อมูลอาหาร — แสดงค่าที่คำนวณได้สำหรับวันนี้';
+    if(_feedChart){ _feedChart.destroy(); _feedChart = null; }
   }
   const lastRecDate = records[records.length-1].date;
   const futureDates = [];
@@ -4653,6 +4652,7 @@ function showFeedChart(pondId){
     </div>`;
   }
   statsEl.innerHTML = statsHtml || '';
+  if(records.length === 0) return;
   if(_feedChart) _feedChart.destroy();
   const ctx = document.getElementById('feedChartCanvas').getContext('2d');
   const datasets = [
