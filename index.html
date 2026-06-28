@@ -3450,11 +3450,13 @@ function showYearlyDetail(type){
     const c = (STATE.pondCosts2 && STATE.pondCosts2[p.id]) || {};
     const fixed = Object.keys(c).filter(k=>k!=='_custom'&&k!=='_labels').reduce((s,k)=>s+(parseFloat(c[k])||0),0);
     const custom = (c._custom||[]).reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
+    const _hvYD = (STATE.pondHarvests && STATE.pondHarvests[p.id]) || [];
+    const _revYD = _hvYD.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0) || (parseFloat(s.revenue)||0);
     closedEntries.push({
       pondId: p.id,
-      revenue: parseFloat(s.revenue) || 0,
+      revenue: _revYD,
       cost: fixed + custom,
-      profit: (parseFloat(s.revenue)||0) - (fixed+custom)
+      profit: _revYD - (fixed+custom)
     });
   });
 
@@ -3542,12 +3544,18 @@ function renderSummaryTab(){
   const totalCount = entries.reduce((sum, e) => sum + (e.status.population || 0), 0);
   const totalWeightKg = entries.reduce((sum, e) => sum + (e.status.stockWeight || 0), 0);
   const totalHarvestKg = entries.reduce((sum, e) => {
-    if(e.status.status === 'closed') return sum + (e.status.total || 0);
-    return sum;
+    if(e.status.status !== 'closed') return sum;
+    const _hvKg2 = ((STATE.pondHarvests && STATE.pondHarvests[e.pondId]) || []).reduce((s2,h)=>s2+(parseFloat(h.kg)||0),0);
+    const _catchKg2 = (parseFloat(e.status.partial1)||0)+(parseFloat(e.status.partial2)||0)+(parseFloat(e.status.closed)||0);
+    return sum + (parseFloat(e.status.total) || _hvKg2 || _catchKg2 || 0);
   }, 0);
 
   const closedEntries = entries.filter(e => e.status.status === 'closed');
-  const totalRevenue = closedEntries.reduce((sum, e) => sum + (parseFloat(e.status.revenue) || 0), 0);
+  const totalRevenue = closedEntries.reduce((sum, e) => {
+    const _hvST = (STATE.pondHarvests && STATE.pondHarvests[e.pondId]) || [];
+    const _revST = _hvST.reduce((s2,h)=>s2+(parseFloat(h.revenue)||0),0) || (parseFloat(e.status.revenue)||0);
+    return sum + _revST;
+  }, 0);
   const totalCost = closedEntries.reduce((sum, e) => {
     const c = (STATE.pondCosts2 && STATE.pondCosts2[e.pondId]) || {};
     const fixed = Object.keys(c).filter(k=>k!=='_custom'&&k!=='_labels').reduce((s,k)=>s+(parseFloat(c[k])||0),0);
