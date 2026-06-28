@@ -600,9 +600,13 @@
           <input type="number" step="0.1" id="waterPH" placeholder="เช่น 8.0">
         </div>
         <div class="field">
-          <label>ความโปร่งใส (cm.)</label>
-          <input type="number" step="1" id="waterTransparency" placeholder="เช่น 70">
+          <label>อัลคาไลน์ (mg/L)</label>
+          <input type="number" step="1" id="waterAlk" placeholder="เช่น 120">
         </div>
+      </div>
+      <div class="field">
+        <label>ความโปร่งใส (cm.)</label>
+        <input type="number" step="1" id="waterTransparency" placeholder="เช่น 70">
       </div>
       <button class="btn full" onclick="saveWaterRecord()"><i class="ti ti-device-floppy"></i> บันทึกค่าน้ำ</button>
     </div>
@@ -1793,13 +1797,15 @@ function saveWaterRecord(){
   const date = document.getElementById('waterDate').value;
   const pondId = document.getElementById('waterPond').value;
   const ph = document.getElementById('waterPH').value;
+  const alk = document.getElementById('waterAlk').value;
   const transparency = document.getElementById('waterTransparency').value;
   if(!date || !pondId){ showToast('กรุณากรอกข้อมูลให้ครบ'); return; }
-  if(ph==='' && transparency===''){ showToast('กรุณากรอก PH หรือความโปร่งใสอย่างน้อย 1 ค่า'); return; }
+  if(ph==='' && alk==='' && transparency===''){ showToast('กรุณากรอกอย่างน้อย 1 ค่า'); return; }
 
   const record = {
     date, period: waterPeriod, pondId,
     ph: ph!=='' ? parseFloat(ph) : null,
+    alk: alk!=='' ? parseFloat(alk) : null,
     transparency: transparency!=='' ? parseFloat(transparency) : null,
     user: STATE.currentUser, ts: Date.now()
   };
@@ -1816,6 +1822,7 @@ function saveWaterRecord(){
   saveState();
   showToast(idx >= 0 ? 'อัปเดตค่าน้ำล่าสุดแล้ว' : 'บันทึกค่าน้ำแล้ว');
   document.getElementById('waterPH').value='';
+  document.getElementById('waterAlk').value='';
   document.getElementById('waterTransparency').value='';
   renderWaterRecentTable();
 }
@@ -1838,7 +1845,7 @@ function renderWaterRecentTable(){
     wrap.innerHTML = `<div class="empty-state"><i class="ti ti-droplet"></i>ยังไม่มีข้อมูลค่าน้ำ</div>`;
     return;
   }
-  let html = '<table><thead><tr><th>วันที่</th><th>ช่วง</th><th>บ่อ</th><th>PH</th><th>โปร่งใส (cm.)</th><th>โดย</th><th></th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>วันที่</th><th>ช่วง</th><th>บ่อ</th><th>PH</th><th>Alk</th><th>โปร่งใส (cm.)</th><th>โดย</th><th></th></tr></thead><tbody>';
   recent.forEach(r=>{
     const idx = STATE.waterRecords.indexOf(r);
     html += `<tr>
@@ -1846,6 +1853,7 @@ function renderWaterRecentTable(){
       <td><span class="badge ${r.period==='เช้า'?'amber':'blue'}">${r.period}</span></td>
       <td>บ่อ ${r.pondId}</td>
       <td>${r.ph !== null ? r.ph : '-'}</td>
+      <td>${r.alk != null ? r.alk : '-'}</td>
       <td>${r.transparency !== null ? r.transparency : '-'}</td>
       <td><span class="badge green">${r.user||'-'}</span></td>
       <td style="white-space:nowrap;">
@@ -1863,8 +1871,9 @@ function editWaterRecord(idx){
   document.getElementById('waterDate').value = r.date;
   document.getElementById('waterPond').value = r.pondId;
   setWaterPeriod(r.period);
-  document.getElementById('waterPH').value = r.ph !== null ? r.ph : '';
-  document.getElementById('waterTransparency').value = r.transparency !== null ? r.transparency : '';
+  document.getElementById('waterPH').value = r.ph != null ? r.ph : '';
+  document.getElementById('waterAlk').value = r.alk != null ? r.alk : '';
+  document.getElementById('waterTransparency').value = r.transparency != null ? r.transparency : '';
   document.querySelector('#tab-water .card').scrollIntoView({behavior:'smooth'});
   showToast('โหลดข้อมูลมาให้แก้ไขแล้ว - กดบันทึกเพื่ออัปเดต');
 }
@@ -3787,15 +3796,16 @@ function renderHistory(){
       wrap.innerHTML = `<div class="empty-state"><i class="ti ti-database"></i>ไม่มีข้อมูล</div>`;
       return;
     }
-    let html = '<table><thead><tr><th>วันที่</th><th>ช่วง</th><th>บ่อ</th><th>PH</th><th>โปร่งใส</th><th>โดย</th><th></th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>วันที่</th><th>ช่วง</th><th>บ่อ</th><th>PH</th><th>Alk</th><th>โปร่งใส</th><th>โดย</th><th></th></tr></thead><tbody>';
     recs.forEach(r=>{
       const idx = STATE.waterRecords.indexOf(r);
       html += `<tr>
         <td>${formatDate(r.date)}</td>
         <td><span class="badge ${r.period==='เช้า'?'amber':'blue'}">${r.period}</span></td>
         <td>บ่อ ${r.pondId}</td>
-        <td>${r.ph !== null ? r.ph : '-'}</td>
-        <td>${r.transparency !== null ? r.transparency : '-'}</td>
+        <td>${r.ph != null ? r.ph : '-'}</td>
+        <td>${r.alk != null ? r.alk : '-'}</td>
+        <td>${r.transparency != null ? r.transparency : '-'}</td>
         <td><span class="badge green">${r.user||'-'}</span></td>
         <td style="white-space:nowrap;">
           <button class="icon-btn" onclick="switchTab('water'); editWaterRecord(${idx});">✏️</button>
