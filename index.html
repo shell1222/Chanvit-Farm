@@ -1017,7 +1017,10 @@
       <div class="row3">
         <div class="field">
           <label>ชื่อสารผสมอาหาร</label>
-          <input type="text" id="fmName" placeholder="เช่น วิตามิน C, โปรไบโอติก">
+          <div class="autocomplete-wrap">
+            <input type="text" id="fmName" placeholder="พิมพ์เพื่อค้นหา เช่น วิตามิน, โปรไบโอติก..." autocomplete="off">
+            <div class="autocomplete-list" id="fmSuggestList" style="display:none;"></div>
+          </div>
         </div>
         <div class="field">
           <label>น้ำหนัก (กก.)</label>
@@ -4611,6 +4614,7 @@ function calcFmPreview(){
 }
 
 function renderFeedMixTab(){
+  initFmAutocomplete();
   const items = STATE.feedMixItems || [];
   const tbody = document.getElementById('feedMixBody');
   const tfoot = document.getElementById('feedMixFoot');
@@ -4689,6 +4693,54 @@ function deleteFeedMixItem(idx){
   saveState();
   renderFeedMixTab();
   showToast('ลบ ' + name + ' แล้ว');
+}
+
+function initFmAutocomplete(){
+  const inp  = document.getElementById('fmName');
+  const list = document.getElementById('fmSuggestList');
+  if(!inp || !list) return;
+
+  inp.addEventListener('input', function(){
+    const q = inp.value.toLowerCase().trim();
+    list.innerHTML = '';
+    if(!q){ list.style.display = 'none'; return; }
+    const catalog = STATE.productCatalog || PRODUCT_CATALOG;
+    const matches = catalog.filter(function(p){
+      return p.name.toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 8);
+    if(!matches.length){ list.style.display = 'none'; return; }
+    matches.forEach(function(p){
+      const div = document.createElement('div');
+      div.className = 'autocomplete-item';
+      div.innerHTML = '<span class="ac-name">' + p.name + '</span>'
+        + (p.priceUnit ? '<span class="ac-price">' + p.priceUnit.toLocaleString('th-TH') + ' บ./' + (p.unit||'หน่วย') + '</span>' : '');
+      div.addEventListener('mousedown', function(e){
+        e.preventDefault();
+        inp.value = p.name;
+        // ดึงราคาอัตโนมัติ: priceUnit * qty ถ้ายังไม่มีน้ำหนัก ให้ใส่แค่ราคา/หน่วยก่อน
+        if(p.priceUnit){
+          const wEl = document.getElementById('fmWeight');
+          const pEl = document.getElementById('fmPrice');
+          // ถ้ากรอกน้ำหนักแล้วให้คำนวณราคารวม ถ้ายังไม่มีให้ใส่ราคา/หน่วยไว้ก่อน
+          const w = parseFloat(wEl.value);
+          if(w > 0){
+            pEl.value = (p.priceUnit * w).toFixed(2);
+          } else {
+            pEl.value = p.priceUnit;
+          }
+        }
+        list.style.display = 'none';
+        calcFmPreview();
+        document.getElementById('fmWeight').focus();
+      });
+      list.appendChild(div);
+    });
+    list.style.display = 'block';
+  });
+
+  inp.addEventListener('blur', function(){
+    setTimeout(function(){ list.style.display = 'none'; }, 150);
+  });
 }
 
 function cancelFeedMixEdit(){
