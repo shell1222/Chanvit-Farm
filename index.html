@@ -4599,6 +4599,11 @@ function deleteProduct(idx){
 /* ============================================================
    FEED MIX TAB
    ============================================================ */
+function _fmFmt(v, d=2){
+  if(v == null || isNaN(v)) return '-';
+  return v.toLocaleString('th-TH', {minimumFractionDigits:d, maximumFractionDigits:d});
+}
+
 function calcFmPreview(){
   const w = parseFloat(document.getElementById('fmWeight').value);
   const p = parseFloat(document.getElementById('fmPrice').value);
@@ -4606,7 +4611,7 @@ function calcFmPreview(){
   const txt = document.getElementById('fmPreviewText');
   if(w > 0 && p > 0){
     const perKg = p / w;
-    txt.textContent = `ราคา/กก. = ${fmt(perKg)} บาท`;
+    txt.textContent = `ราคา/กก. = ${_fmFmt(perKg)} บาท`;
     box.style.display = 'block';
   } else {
     box.style.display = 'none';
@@ -4630,9 +4635,9 @@ function renderFeedMixTab(){
     totalP += it.price || 0;
     return `<tr>
       <td>${it.name}</td>
-      <td style="text-align:right;">${fmt(it.weight)}</td>
-      <td style="text-align:right;">${fmt(it.price)}</td>
-      <td style="text-align:right;font-weight:600;color:var(--primary);">${fmt(perKg)}</td>
+      <td style="text-align:right;">${_fmFmt(it.weight)}</td>
+      <td style="text-align:right;">${_fmFmt(it.price)}</td>
+      <td style="text-align:right;font-weight:600;color:var(--primary);">${_fmFmt(perKg)}</td>
       <td style="text-align:center;">
         <button class="btn-icon" onclick="editFeedMixItem(${i})" title="แก้ไข"><i class="ti ti-pencil"></i></button>
         <button class="btn-icon" style="color:var(--danger);" onclick="deleteFeedMixItem(${i})" title="ลบ"><i class="ti ti-trash"></i></button>
@@ -4640,9 +4645,9 @@ function renderFeedMixTab(){
     </tr>`;
   }).join('');
   const avgPerKg = totalW > 0 ? totalP / totalW : 0;
-  document.getElementById('fmTotalWeight').textContent = fmt(totalW) + ' กก.';
-  document.getElementById('fmTotalPrice').textContent = fmt(totalP) + ' บาท';
-  document.getElementById('fmAvgPerKg').textContent = fmt(avgPerKg) + ' บาท/กก.';
+  document.getElementById('fmTotalWeight').textContent = _fmFmt(totalW) + ' กก.';
+  document.getElementById('fmTotalPrice').textContent = _fmFmt(totalP) + ' บาท';
+  document.getElementById('fmAvgPerKg').textContent = _fmFmt(avgPerKg) + ' บาท/กก.';
   tfoot.style.display = '';
 }
 
