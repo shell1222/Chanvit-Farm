@@ -4649,9 +4649,9 @@ function renderFeedMixTab(){
       <td style="text-align:right;">${it.gramPerBottle != null ? it.gramPerBottle : '-'}</td>
       <td style="text-align:right;">${it.qty != null ? it.qty : '-'}</td>
       <td style="text-align:right;font-weight:700;color:var(--primary);font-size:15px;">${_fmFmt(costPerKg,4)} บ.</td>
-      <td style="text-align:center;">
-        <button class="btn-icon" onclick="editFeedMixItem(${i})" title="แก้ไข"><i class="ti ti-pencil"></i></button>
-        <button class="btn-icon" style="color:var(--danger);" onclick="deleteFeedMixItem(${i})" title="ลบ"><i class="ti ti-trash"></i></button>
+      <td style="text-align:center;white-space:nowrap;">
+        <button onclick="editFeedMixItem(${i})" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;margin-right:4px;"><i class="ti ti-pencil"></i> แก้ไข</button>
+        <button onclick="deleteFeedMixItem(${i})" style="background:var(--danger);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;"><i class="ti ti-trash"></i> ลบ</button>
       </td>
     </tr>`;
   }).join('');
