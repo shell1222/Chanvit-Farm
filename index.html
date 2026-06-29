@@ -545,6 +545,7 @@
   <div class="tab" data-tab="summary" onclick="switchTab('summary')">📊 สรุปปีนี้</div>
   <div class="tab" data-tab="releaseplan" onclick="switchTab('releaseplan')">🐟 แผนปล่อย</div>
   <div class="tab" data-tab="harvestplan" onclick="switchTab('harvestplan')">🦐 แผนจับ</div>
+  <div class="tab" data-tab="feedmix" onclick="switchTab('feedmix')"><i class="ti ti-flask"></i> สารผสมอาหาร</div>
 </div>
 
 <div class="container">
@@ -1009,6 +1010,64 @@
     </div>
   </div>
 
+  <!-- ============ TAB: FEED MIX ============ -->
+  <div class="tab-content" id="tab-feedmix" style="display:none;">
+    <div class="card">
+      <h2><i class="ti ti-flask"></i> บันทึกสารผสมอาหาร</h2>
+      <div class="row3">
+        <div class="field">
+          <label>ชื่อสารผสมอาหาร</label>
+          <input type="text" id="fmName" placeholder="เช่น วิตามิน C, โปรไบโอติก">
+        </div>
+        <div class="field">
+          <label>น้ำหนัก (กก.)</label>
+          <input type="number" step="0.01" id="fmWeight" placeholder="เช่น 25" oninput="calcFmPreview()">
+        </div>
+        <div class="field">
+          <label>ราคารวม (บาท)</label>
+          <input type="number" step="0.01" id="fmPrice" placeholder="เช่น 1500" oninput="calcFmPreview()">
+        </div>
+      </div>
+      <div id="fmPreview" style="display:none;background:var(--primary-light);border-radius:10px;padding:10px 14px;margin:8px 0;font-size:14px;color:var(--primary);font-weight:600;">
+        <i class="ti ti-calculator"></i> <span id="fmPreviewText"></span>
+      </div>
+      <input type="hidden" id="fmEditIdx" value="-1">
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button class="btn full" onclick="saveFeedMixItem()"><i class="ti ti-device-floppy"></i> <span id="fmBtnLabel">เพิ่มรายการ</span></button>
+        <button class="btn" id="fmCancelBtn" style="display:none;background:var(--danger);color:#fff;padding:0 18px;" onclick="cancelFeedMixEdit()"><i class="ti ti-x"></i></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><i class="ti ti-list"></i> รายการสารผสมอาหาร</h2>
+      <div class="table-wrap">
+        <table class="cd-table" id="feedMixTable">
+          <thead>
+            <tr>
+              <th>ชื่อสารผสมอาหาร</th>
+              <th style="text-align:right;">น้ำหนัก (กก.)</th>
+              <th style="text-align:right;">ราคารวม (บาท)</th>
+              <th style="text-align:right;">ราคา/กก. (บาท)</th>
+              <th style="text-align:center;">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="feedMixBody">
+            <tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:20px;">ยังไม่มีรายการ</td></tr>
+          </tbody>
+          <tfoot id="feedMixFoot" style="display:none;">
+            <tr style="font-weight:700;background:var(--primary-light);">
+              <td>รวมทั้งหมด</td>
+              <td style="text-align:right;" id="fmTotalWeight">-</td>
+              <td style="text-align:right;" id="fmTotalPrice">-</td>
+              <td style="text-align:right;" id="fmAvgPerKg">-</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1254,6 +1313,7 @@ function applyLoaded(loaded){
   STATE.userPins = loaded.userPins || {};
   STATE.releasePlan = loaded.releasePlan || [];
   STATE.harvestPlan = loaded.harvestPlan || [];
+  STATE.feedMixItems = loaded.feedMixItems || [];
 }
 function resetState(){
   STATE.ponds = DEFAULT_PONDS; STATE.users = []; STATE.pondStatus = {};
@@ -1280,6 +1340,7 @@ function reRenderActiveTab(){
   else if(tab==='summary') renderSummaryTab();
   else if(tab==='releaseplan') renderReleasePlanTab();
   else if(tab==='harvestplan') renderHarvestPlanTab();
+  else if(tab==='feedmix') renderFeedMixTab();
 }
 
 let _realtimeStarted = false;
@@ -1347,7 +1408,8 @@ async function saveState(){
     pinUsers: STATE.pinUsers || [],
     userPins: STATE.userPins || {},
     releasePlan: STATE.releasePlan || [],
-    harvestPlan: STATE.harvestPlan || []
+    harvestPlan: STATE.harvestPlan || [],
+    feedMixItems: STATE.feedMixItems || []
   };
   try{
     localStorage.setItem('farm-data', JSON.stringify(payload));
@@ -1380,7 +1442,8 @@ const TAB_LABELS = {
   feed: 'อาหารประจำวัน', water: 'PH/ความโปร่งใส', growth: 'สุ่มไซส์กุ้ง',
   ponds: 'ข้อมูลบ่อ', status: 'สถานะบ่อ', cost: 'บัญชีต้นทุน',
   history: 'ประวัติการจับ', summary: 'สรุปปีนี้',
-  releaseplan: 'แผนการปล่อย', harvestplan: 'แผนการจับ'
+  releaseplan: 'แผนการปล่อย', harvestplan: 'แผนการจับ',
+  feedmix: 'สารผสมอาหาร'
 };
 
 function getUserRole(name){ return (STATE.userRoles && STATE.userRoles[name]) || 'user'; }
@@ -1688,6 +1751,7 @@ function switchTab(name){
   if(name==='summary') renderSummaryTab();
   if(name==='releaseplan') renderReleasePlanTab();
   if(name==='harvestplan') renderHarvestPlanTab();
+  if(name==='feedmix') renderFeedMixTab();
   logActivity('เปิดแท็บ', TAB_LABELS[name] || name);
 }
 
@@ -4527,6 +4591,114 @@ function deleteProduct(idx){
   saveState();
   renderProductTable();
   showToast('ลบ ' + name + ' แล้ว');
+}
+
+/* ============================================================
+   FEED MIX TAB
+   ============================================================ */
+function calcFmPreview(){
+  const w = parseFloat(document.getElementById('fmWeight').value);
+  const p = parseFloat(document.getElementById('fmPrice').value);
+  const box = document.getElementById('fmPreview');
+  const txt = document.getElementById('fmPreviewText');
+  if(w > 0 && p > 0){
+    const perKg = p / w;
+    txt.textContent = `ราคา/กก. = ${fmt(perKg)} บาท`;
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+function renderFeedMixTab(){
+  const items = STATE.feedMixItems || [];
+  const tbody = document.getElementById('feedMixBody');
+  const tfoot = document.getElementById('feedMixFoot');
+  if(!items.length){
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:20px;">ยังไม่มีรายการ</td></tr>';
+    tfoot.style.display = 'none';
+    return;
+  }
+  let totalW = 0, totalP = 0;
+  tbody.innerHTML = items.map((it, i) => {
+    const perKg = it.weight > 0 ? it.price / it.weight : 0;
+    totalW += it.weight || 0;
+    totalP += it.price || 0;
+    return `<tr>
+      <td>${it.name}</td>
+      <td style="text-align:right;">${fmt(it.weight)}</td>
+      <td style="text-align:right;">${fmt(it.price)}</td>
+      <td style="text-align:right;font-weight:600;color:var(--primary);">${fmt(perKg)}</td>
+      <td style="text-align:center;">
+        <button class="btn-icon" onclick="editFeedMixItem(${i})" title="แก้ไข"><i class="ti ti-pencil"></i></button>
+        <button class="btn-icon" style="color:var(--danger);" onclick="deleteFeedMixItem(${i})" title="ลบ"><i class="ti ti-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+  const avgPerKg = totalW > 0 ? totalP / totalW : 0;
+  document.getElementById('fmTotalWeight').textContent = fmt(totalW) + ' กก.';
+  document.getElementById('fmTotalPrice').textContent = fmt(totalP) + ' บาท';
+  document.getElementById('fmAvgPerKg').textContent = fmt(avgPerKg) + ' บาท/กก.';
+  tfoot.style.display = '';
+}
+
+function saveFeedMixItem(){
+  const name   = document.getElementById('fmName').value.trim();
+  const weight = parseFloat(document.getElementById('fmWeight').value);
+  const price  = parseFloat(document.getElementById('fmPrice').value);
+  const editIdx = parseInt(document.getElementById('fmEditIdx').value);
+
+  if(!name){ showToast('กรุณาใส่ชื่อสารผสมอาหาร'); return; }
+  if(isNaN(weight) || weight <= 0){ showToast('กรุณาใส่น้ำหนัก'); return; }
+  if(isNaN(price) || price <= 0){ showToast('กรุณาใส่ราคา'); return; }
+
+  if(!STATE.feedMixItems) STATE.feedMixItems = [];
+  const item = { name, weight, price };
+
+  if(editIdx >= 0){
+    STATE.feedMixItems[editIdx] = item;
+    showToast('แก้ไข ' + name + ' แล้ว');
+  } else {
+    STATE.feedMixItems.push(item);
+    showToast('เพิ่ม ' + name + ' แล้ว');
+  }
+  saveState();
+  cancelFeedMixEdit();
+  renderFeedMixTab();
+}
+
+function editFeedMixItem(idx){
+  const it = (STATE.feedMixItems || [])[idx];
+  if(!it) return;
+  document.getElementById('fmName').value   = it.name;
+  document.getElementById('fmWeight').value = it.weight;
+  document.getElementById('fmPrice').value  = it.price;
+  document.getElementById('fmEditIdx').value = idx;
+  document.getElementById('fmBtnLabel').textContent = 'บันทึกการแก้ไข';
+  document.getElementById('fmCancelBtn').style.display = '';
+  calcFmPreview();
+  document.getElementById('fmName').focus();
+}
+
+function deleteFeedMixItem(idx){
+  const items = STATE.feedMixItems || [];
+  if(!items[idx]) return;
+  const name = items[idx].name;
+  items.splice(idx, 1);
+  STATE.feedMixItems = items;
+  saveState();
+  renderFeedMixTab();
+  showToast('ลบ ' + name + ' แล้ว');
+}
+
+function cancelFeedMixEdit(){
+  document.getElementById('fmName').value    = '';
+  document.getElementById('fmWeight').value  = '';
+  document.getElementById('fmPrice').value   = '';
+  document.getElementById('fmEditIdx').value = '-1';
+  document.getElementById('fmBtnLabel').textContent = 'เพิ่มรายการ';
+  document.getElementById('fmCancelBtn').style.display = 'none';
+  document.getElementById('fmPreview').style.display = 'none';
 }
 
 /* ============================================================
