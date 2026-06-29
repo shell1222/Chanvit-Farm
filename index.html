@@ -1305,7 +1305,7 @@ function todayStr(){
 function applyLoaded(loaded){
   STATE.ponds = loaded.ponds || DEFAULT_PONDS;
   STATE.users = loaded.users || [];
-  STATE.feedRecords = loaded.feedRecords || [];
+  STATE.feedRecords = (loaded.feedRecords || []).sort((a,b)=>a.date<b.date?1:-1);
   STATE.waterRecords = loaded.waterRecords || [];
   STATE.growthRecords = loaded.growthRecords || [];
   STATE.logo = loaded.logo || DEFAULT_LOGO;
