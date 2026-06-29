@@ -1016,32 +1016,32 @@
     <!-- ฟอร์มเพิ่มสาร -->
     <div class="card">
       <h2><i class="ti ti-flask"></i> <span id="fmFormTitle">เพิ่มสารผสมอาหาร</span></h2>
-      <p class="hint" style="margin-bottom:10px;">สูตร: ต้นทุน/กก. อาหาร = (ราคาสารผสม ÷ ปริมาณ/กระปุก) × ปริมาณการใช้งาน</p>
+      <p class="hint" style="margin-bottom:10px;">สูตร: (ราคา ÷ กรัม/กระปุก) × กรัม/กก. = ต้นทุน/กก.</p>
       <div class="row2">
         <div class="field">
-          <label>① ชื่อสารผสมอาหาร</label>
+          <label>① ชื่อสาร</label>
           <div class="autocomplete-wrap">
-            <input type="text" id="fmName" placeholder="พิมพ์ค้นหา เช่น วิตามิน, ไบโอติก..." autocomplete="off">
+            <input type="text" id="fmName" placeholder="เช่น วิตามิน, ไบโอติก..." autocomplete="off">
             <div class="autocomplete-list" id="fmSuggestList" style="display:none;"></div>
           </div>
         </div>
         <div class="field">
-          <label>② ราคาสารผสมอาหาร (บาท)</label>
+          <label>② ราคา (บาท)</label>
           <input type="number" step="0.01" id="fmUnitPrice" placeholder="เช่น 180" oninput="calcFmPreview()">
         </div>
       </div>
       <div class="row3">
         <div class="field">
-          <label>③ ปริมาณสารผสมอาหาร/กระปุก (กรัม)</label>
+          <label>③ กรัม/กระปุก</label>
           <input type="number" step="1" id="fmGramPerBottle" placeholder="เช่น 500" oninput="calcFmPreview()">
         </div>
         <div class="field">
-          <label>④ ปริมาณการใช้งาน (กรัม/อาหาร 1 กิโล)</label>
+          <label>④ กรัม/กก. อาหาร</label>
           <input type="number" step="0.1" id="fmQty" placeholder="เช่น 2.5" oninput="calcFmPreview()">
         </div>
         <div class="field">
-          <label style="color:var(--primary);font-weight:700;">ต้นทุน/กก. อาหาร (บาท)</label>
-          <input type="number" step="0.0001" id="fmCostPerKg" placeholder="คำนวณอัตโนมัติ" style="background:var(--primary-light);font-weight:700;color:var(--primary);" readonly>
+          <label style="color:var(--primary);font-weight:700;">ต้นทุน/กก. (บาท)</label>
+          <input type="number" step="0.0001" id="fmCostPerKg" placeholder="อัตโนมัติ" style="background:var(--primary-light);font-weight:700;color:var(--primary);" readonly>
         </div>
       </div>
       <div id="fmPreview" style="display:none;background:var(--primary-light);border-radius:10px;padding:10px 14px;margin:8px 0;font-size:14px;color:var(--primary);font-weight:600;">
@@ -1062,12 +1062,12 @@
         <table class="cd-table">
           <thead>
             <tr>
-              <th>ชื่อสารผสมอาหาร</th>
-              <th style="text-align:right;">ราคา/กระปุก (บาท)</th>
-              <th style="text-align:right;">กรัม/กระปุก</th>
-              <th style="text-align:right;">กรัม/กก. อาหาร</th>
-              <th style="text-align:right;color:var(--primary);">ต้นทุน/กก. อาหาร (บาท)</th>
-              <th style="text-align:center;">จัดการ</th>
+              <th>ชื่อสาร</th>
+              <th style="text-align:right;">ราคา (บ.)</th>
+              <th style="text-align:right;">ก./กระปุก</th>
+              <th style="text-align:right;">ก./กก.</th>
+              <th style="text-align:right;color:var(--primary);">ต้นทุน/กก.</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="feedMixBody">
