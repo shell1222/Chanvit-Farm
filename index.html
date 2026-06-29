@@ -1422,6 +1422,16 @@ async function saveState(){
   };
   try{
     localStorage.setItem('farm-data', JSON.stringify(payload));
+    const cloudDoc = await db.collection('farms').doc('chanvit').get();
+    if(cloudDoc.exists){
+      const cd = cloudDoc.data();
+      const stFeed = new Set(payload.feedRecords.map(r=>r.date));
+      const stWater = new Set(payload.waterRecords.map(r=>`${r.date}|${r.pondId}|${r.period}`));
+      const extraFeed = (cd.feedRecords||[]).filter(r=>r.date && !stFeed.has(r.date));
+      const extraWater = (cd.waterRecords||[]).filter(r=>r.date && !stWater.has(`${r.date}|${r.pondId}|${r.period}`));
+      if(extraFeed.length) payload.feedRecords = [...payload.feedRecords, ...extraFeed];
+      if(extraWater.length) payload.waterRecords = [...payload.waterRecords, ...extraWater];
+    }
     await db.collection('farms').doc('chanvit').set(payload);
   }catch(e){
     console.error('saveState error', e);
