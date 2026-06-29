@@ -1067,11 +1067,10 @@
               <th style="text-align:right;">ก./กระปุก</th>
               <th style="text-align:right;">ก./กก.</th>
               <th style="text-align:right;color:var(--primary);">ต้นทุน/กก.</th>
-              <th></th>
             </tr>
           </thead>
           <tbody id="feedMixBody">
-            <tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:20px;">ยังไม่มีรายการ</td></tr>
+            <tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:20px;">ยังไม่มีรายการ</td></tr>
           </tbody>
         </table>
       </div>
@@ -4644,15 +4643,17 @@ function renderFeedMixTab(){
       : (it.unitPrice > 0 && it.gramPerBottle > 0 && it.qty > 0
           ? (it.unitPrice / it.gramPerBottle) * it.qty : 0);
     return `<tr>
-      <td><b>${it.name}</b></td>
+      <td>
+        <div style="font-weight:600;">${it.name}</div>
+        <div style="margin-top:4px;display:flex;gap:6px;">
+          <button onclick="editFeedMixItem(${i})" style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:#e6f1fb;color:var(--accent);font-weight:600;"><i class="ti ti-pencil"></i> แก้ไข</button>
+          <button onclick="deleteFeedMixItem(${i})" style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;font-size:12px;border:none;border-radius:6px;cursor:pointer;background:#fcebeb;color:var(--danger);font-weight:600;"><i class="ti ti-trash"></i> ลบ</button>
+        </div>
+      </td>
       <td style="text-align:right;">${_fmFmt(it.unitPrice)}</td>
       <td style="text-align:right;">${it.gramPerBottle != null ? it.gramPerBottle : '-'}</td>
       <td style="text-align:right;">${it.qty != null ? it.qty : '-'}</td>
-      <td style="text-align:right;font-weight:700;color:var(--primary);font-size:15px;">${_fmFmt(costPerKg,4)} บ.</td>
-      <td style="text-align:center;">
-        <button class="btn-icon" onclick="editFeedMixItem(${i})" style="color:var(--accent);font-size:16px;"><i class="ti ti-pencil"></i></button>
-        <button class="btn-icon" onclick="deleteFeedMixItem(${i})" style="color:var(--danger);font-size:16px;"><i class="ti ti-trash"></i></button>
-      </td>
+      <td style="text-align:right;font-weight:700;color:var(--primary);font-size:15px;">${_fmFmt(costPerKg,4)}</td>
     </tr>`;
   }).join('');
 }
