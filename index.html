@@ -1016,27 +1016,27 @@
     <!-- ฟอร์มเพิ่มสาร -->
     <div class="card">
       <h2><i class="ti ti-flask"></i> <span id="fmFormTitle">เพิ่มสารผสมอาหาร</span></h2>
-      <p class="hint" style="margin-bottom:10px;">สูตร: ต้นทุน/กก. อาหาร = (ราคา/กระปุก ÷ กรัม/กระปุก) × กรัม/กก. อาหาร</p>
+      <p class="hint" style="margin-bottom:10px;">สูตร: ต้นทุน/กก. อาหาร = (ราคาสารผสม ÷ ปริมาณ/กระปุก) × ปริมาณการใช้งาน</p>
       <div class="row2">
         <div class="field">
-          <label>ชื่อสารผสมอาหาร</label>
+          <label>① ชื่อสารผสมอาหาร</label>
           <div class="autocomplete-wrap">
             <input type="text" id="fmName" placeholder="พิมพ์ค้นหา เช่น วิตามิน, ไบโอติก..." autocomplete="off">
             <div class="autocomplete-list" id="fmSuggestList" style="display:none;"></div>
           </div>
         </div>
         <div class="field">
-          <label>ราคา/กระปุก (บาท)</label>
+          <label>② ราคาสารผสมอาหาร (บาท)</label>
           <input type="number" step="0.01" id="fmUnitPrice" placeholder="เช่น 180" oninput="calcFmPreview()">
         </div>
       </div>
       <div class="row3">
         <div class="field">
-          <label>กรัม/กระปุก</label>
+          <label>③ ปริมาณสารผสมอาหาร/กระปุก (กรัม)</label>
           <input type="number" step="1" id="fmGramPerBottle" placeholder="เช่น 500" oninput="calcFmPreview()">
         </div>
         <div class="field">
-          <label>กรัม/กก. อาหาร</label>
+          <label>④ ปริมาณการใช้งาน (กรัม/อาหาร 1 กิโล)</label>
           <input type="number" step="0.1" id="fmQty" placeholder="เช่น 2.5" oninput="calcFmPreview()">
         </div>
         <div class="field">
