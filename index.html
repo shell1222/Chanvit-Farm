@@ -1013,20 +1013,10 @@
   <!-- ============ TAB: FEED MIX ============ -->
   <div class="tab-content" id="tab-feedmix" style="display:none;">
 
-    <!-- ข้อมูลกระสอบ -->
-    <div class="card" style="background:var(--primary-light);border:1.5px solid var(--primary);">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <i class="ti ti-info-circle" style="color:var(--primary);font-size:20px;"></i>
-        <span style="font-size:14px;color:var(--primary);font-weight:600;">คำนวณต้นทุนสารผสม <b>ต่อ กก. อาหาร</b> โดยอิง 1 กระสอบ =</span>
-        <input type="number" id="fmBagKg" value="25" min="1" step="0.5" style="width:64px;font-size:15px;font-weight:700;text-align:center;border:1.5px solid var(--primary);border-radius:8px;padding:4px 6px;color:var(--primary);" oninput="renderFeedMixTab()">
-        <span style="font-size:14px;color:var(--primary);font-weight:600;">กก.</span>
-        <span style="font-size:12px;color:var(--text-secondary);margin-left:8px;">สูตร: (ราคาสาร/หน่วย × ปริมาณที่ใช้) ÷ จำนวน กก./กระสอบ</span>
-      </div>
-    </div>
-
     <!-- ฟอร์มเพิ่มสาร -->
     <div class="card">
       <h2><i class="ti ti-flask"></i> <span id="fmFormTitle">เพิ่มสารผสมอาหาร</span></h2>
+      <p class="hint" style="margin-bottom:10px;">สูตร: ต้นทุน/กก. อาหาร = (ราคาสาร × กรัมที่ใช้/กก.) ÷ 1,000</p>
       <div class="row2">
         <div class="field">
           <label>ชื่อสารผสมอาหาร</label>
@@ -1036,22 +1026,18 @@
           </div>
         </div>
         <div class="field">
-          <label>ราคาสาร/หน่วย (บาท)</label>
+          <label>ราคาสาร (บาท/กก.)</label>
           <input type="number" step="0.01" id="fmUnitPrice" placeholder="เช่น 180" oninput="calcFmPreview()">
         </div>
       </div>
-      <div class="row3">
+      <div class="row2">
         <div class="field">
-          <label>ปริมาณที่ใช้/กระสอบ</label>
-          <input type="number" step="0.01" id="fmQty" placeholder="เช่น 0.5" oninput="calcFmPreview()">
-        </div>
-        <div class="field">
-          <label>หน่วย</label>
-          <input type="text" id="fmUnit" placeholder="ขวด, ซอง, กก.">
+          <label>กรัม/กก. อาหาร</label>
+          <input type="number" step="0.1" id="fmQty" placeholder="เช่น 2.5" oninput="calcFmPreview()">
         </div>
         <div class="field">
           <label style="color:var(--primary);font-weight:700;">ต้นทุน/กก. อาหาร (บาท)</label>
-          <input type="number" step="0.01" id="fmCostPerKg" placeholder="คำนวณอัตโนมัติ" style="background:var(--primary-light);font-weight:700;color:var(--primary);" oninput="calcFmPreview()">
+          <input type="number" step="0.0001" id="fmCostPerKg" placeholder="คำนวณอัตโนมัติ" style="background:var(--primary-light);font-weight:700;color:var(--primary);" oninput="calcFmPreview()">
         </div>
       </div>
       <div id="fmPreview" style="display:none;background:var(--primary-light);border-radius:10px;padding:10px 14px;margin:8px 0;font-size:14px;color:var(--primary);font-weight:600;">
@@ -1073,15 +1059,14 @@
           <thead>
             <tr>
               <th>ชื่อสารผสมอาหาร</th>
-              <th style="text-align:right;">ราคา/หน่วย (บาท)</th>
-              <th style="text-align:right;">ปริมาณ/กระสอบ</th>
-              <th style="text-align:right;">หน่วย</th>
-              <th style="text-align:right;color:var(--primary);">ต้นทุน/กก. อาหาร</th>
+              <th style="text-align:right;">ราคาสาร (บาท/กก.)</th>
+              <th style="text-align:right;">กรัม/กก. อาหาร</th>
+              <th style="text-align:right;color:var(--primary);">ต้นทุน/กก. อาหาร (บาท)</th>
               <th style="text-align:center;">จัดการ</th>
             </tr>
           </thead>
           <tbody id="feedMixBody">
-            <tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:20px;">ยังไม่มีรายการ</td></tr>
+            <tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:20px;">ยังไม่มีรายการ</td></tr>
           </tbody>
         </table>
       </div>
@@ -4621,27 +4606,20 @@ function _fmFmt(v, d=2){
   return v.toLocaleString('th-TH', {minimumFractionDigits:d, maximumFractionDigits:d});
 }
 
-function _fmBagKg(){
-  const el = document.getElementById('fmBagKg');
-  const v = el ? parseFloat(el.value) : 25;
-  return (v > 0 ? v : 25);
-}
-
 function calcFmPreview(){
   const unitPrice = parseFloat(document.getElementById('fmUnitPrice').value);
   const qty       = parseFloat(document.getElementById('fmQty').value);
-  const bagKg     = _fmBagKg();
   const box       = document.getElementById('fmPreview');
   const txt       = document.getElementById('fmPreviewText');
   const cpkEl     = document.getElementById('fmCostPerKg');
 
   if(unitPrice > 0 && qty > 0){
-    const costPerKg = (unitPrice * qty) / bagKg;
+    const costPerKg = (unitPrice * qty) / 1000;
     cpkEl.value = costPerKg.toFixed(4);
-    txt.textContent = `(${_fmFmt(unitPrice)} × ${qty}) ÷ ${bagKg} กก. = ${_fmFmt(costPerKg)} บาท/กก. อาหาร`;
+    txt.textContent = `(${_fmFmt(unitPrice)} บ./กก. × ${qty} ก.) ÷ 1,000 = ${_fmFmt(costPerKg,4)} บาท/กก. อาหาร`;
     box.style.display = 'block';
   } else if(!isNaN(parseFloat(cpkEl.value)) && parseFloat(cpkEl.value) > 0){
-    txt.textContent = `ต้นทุน/กก. อาหาร = ${_fmFmt(parseFloat(cpkEl.value))} บาท`;
+    txt.textContent = `ต้นทุน/กก. อาหาร = ${_fmFmt(parseFloat(cpkEl.value),4)} บาท`;
     box.style.display = 'block';
   } else {
     box.style.display = 'none';
@@ -4658,13 +4636,12 @@ function renderFeedMixTab(){
   }
   tbody.innerHTML = items.map((it, i) => {
     const costPerKg = it.costPerKg != null ? it.costPerKg
-      : (it.unitPrice > 0 && it.qty > 0 ? (it.unitPrice * it.qty) / _fmBagKg() : 0);
+      : (it.unitPrice > 0 && it.qty > 0 ? (it.unitPrice * it.qty) / 1000 : 0);
     return `<tr>
       <td><b>${it.name}</b></td>
       <td style="text-align:right;">${_fmFmt(it.unitPrice)}</td>
       <td style="text-align:right;">${it.qty != null ? it.qty : '-'}</td>
-      <td style="text-align:right;">${it.unit || '-'}</td>
-      <td style="text-align:right;font-weight:700;color:var(--primary);font-size:15px;">${_fmFmt(costPerKg)} บ.</td>
+      <td style="text-align:right;font-weight:700;color:var(--primary);font-size:15px;">${_fmFmt(costPerKg,4)} บ.</td>
       <td style="text-align:center;">
         <button class="btn-icon" onclick="editFeedMixItem(${i})" title="แก้ไข"><i class="ti ti-pencil"></i></button>
         <button class="btn-icon" style="color:var(--danger);" onclick="deleteFeedMixItem(${i})" title="ลบ"><i class="ti ti-trash"></i></button>
@@ -4677,24 +4654,22 @@ function saveFeedMixItem(){
   const name      = document.getElementById('fmName').value.trim();
   const unitPrice = parseFloat(document.getElementById('fmUnitPrice').value) || 0;
   const qty       = parseFloat(document.getElementById('fmQty').value) || 0;
-  const unit      = document.getElementById('fmUnit').value.trim();
   const cpkRaw    = parseFloat(document.getElementById('fmCostPerKg').value);
   const editIdx   = parseInt(document.getElementById('fmEditIdx').value);
 
   if(!name){ showToast('กรุณาใส่ชื่อสารผสมอาหาร'); return; }
 
-  // คำนวณ costPerKg: ถ้ากรอกราคา+ปริมาณ ให้คำนวณ, ถ้ากรอก costPerKg ตรงๆ ก็ใช้ได้
   let costPerKg = 0;
   if(unitPrice > 0 && qty > 0){
-    costPerKg = (unitPrice * qty) / _fmBagKg();
+    costPerKg = (unitPrice * qty) / 1000;
   } else if(!isNaN(cpkRaw) && cpkRaw > 0){
     costPerKg = cpkRaw;
   } else {
-    showToast('กรุณาใส่ราคา/หน่วย และปริมาณ หรือต้นทุน/กก. โดยตรง'); return;
+    showToast('กรุณาใส่ราคาสาร และ กรัม/กก. หรือต้นทุน/กก. โดยตรง'); return;
   }
 
   if(!STATE.feedMixItems) STATE.feedMixItems = [];
-  const item = { name, unitPrice, qty, unit, costPerKg };
+  const item = { name, unitPrice, qty, costPerKg };
 
   if(editIdx >= 0){
     STATE.feedMixItems[editIdx] = item;
@@ -4714,7 +4689,6 @@ function editFeedMixItem(idx){
   document.getElementById('fmName').value      = it.name;
   document.getElementById('fmUnitPrice').value = it.unitPrice || '';
   document.getElementById('fmQty').value       = it.qty || '';
-  document.getElementById('fmUnit').value      = it.unit || '';
   document.getElementById('fmCostPerKg').value = it.costPerKg != null ? it.costPerKg.toFixed(4) : '';
   document.getElementById('fmEditIdx').value   = idx;
   document.getElementById('fmBtnLabel').textContent = 'บันทึกการแก้ไข';
@@ -4761,7 +4735,6 @@ function initFmAutocomplete(){
         e.preventDefault();
         inp.value = p.name;
         if(p.priceUnit) document.getElementById('fmUnitPrice').value = p.priceUnit;
-        if(p.unit)      document.getElementById('fmUnit').value = p.unit;
         list.style.display = 'none';
         calcFmPreview();
         document.getElementById('fmQty').focus();
@@ -4780,7 +4753,6 @@ function cancelFeedMixEdit(){
   document.getElementById('fmName').value      = '';
   document.getElementById('fmUnitPrice').value = '';
   document.getElementById('fmQty').value       = '';
-  document.getElementById('fmUnit').value      = '';
   document.getElementById('fmCostPerKg').value = '';
   document.getElementById('fmEditIdx').value   = '-1';
   document.getElementById('fmBtnLabel').textContent   = 'เพิ่มรายการ';
