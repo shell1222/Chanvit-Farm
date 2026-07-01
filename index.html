@@ -1821,6 +1821,7 @@ function renderFeedTab(){
 }
 
 function saveFeedRecord(){
+  if(!STATE.currentUser){ showToast('กรุณาเลือกชื่อผู้ใช้ก่อนบันทึก'); return; }
   const date = document.getElementById('feedDate').value;
   if(!date){ showToast('กรุณาเลือกวันที่'); return; }
   const entries = {};
