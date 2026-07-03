@@ -2165,6 +2165,7 @@ function loadPondGrowthInfo(){
   }
 
   const growthDate = document.getElementById('growthDate').value || todayStr();
+  const ps2 = STATE.pondStatus[pondId];
 
   // คำนวณอาหารสะสม: ใช้ accFeed รอบสุ่มก่อนหน้าเป็นฐาน + อาหารที่บันทึกหลังจากนั้น
   const prevWithAcc = history.filter(r=>r.accFeed!=null && r.date < growthDate)
@@ -2191,7 +2192,6 @@ function loadPondGrowthInfo(){
   }
 
   const ageEl = document.getElementById('growthAge');
-  const ps2 = STATE.pondStatus[pondId];
   if(history.length > 0){
     const lastSample = history[0];
     const daysSince = Math.round((new Date(growthDate+'T00:00:00') - new Date(lastSample.date+'T00:00:00')) / 86400000);
