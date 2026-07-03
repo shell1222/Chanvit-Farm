@@ -857,6 +857,15 @@
     </div>
 
     <div class="card">
+      <h2>💾 สำรองข้อมูล (Auto Backup)</h2>
+      <div style="font-size:13px;color:#666;margin-bottom:12px;">ระบบบันทึก snapshot อัตโนมัติ 3 รอบล่าสุดทุกครั้งที่มีการบันทึกข้อมูล</div>
+      <div id="backupPanelWrap"></div>
+      <button onclick="downloadBackupJSON()" style="margin-top:10px;display:flex;align-items:center;gap:6px;background:#0f6e56;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;">
+        📥 ดาวน์โหลด JSON สำรองข้อมูล
+      </button>
+    </div>
+
+    <div class="card">
       <h2>📅 ปฏิทินวันพระ</h2>
       <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <span style="display:flex;align-items:center;gap:5px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#fde68a;border:2px solid #f59e0b;font-size:10px;font-weight:700;color:#78350f;">8</span> วันพระ</span>
@@ -1440,10 +1449,55 @@ async function saveState(){
     }
     localStorage.setItem('farm-data', JSON.stringify(payload));
     await db.collection('farms').doc('chanvit').set(payload);
+    // auto-backup: เก็บ snapshot 3 รอบล่าสุด
+    autoBackup(payload);
   }catch(e){
     console.error('saveState error', e);
     showToast('⚠️ บันทึกข้อมูลล้มเหลว! กรุณาตรวจสอบการเชื่อมต่อ');
   }
+}
+
+function autoBackup(payload){
+  try{
+    const MAX=3;
+    const raw=localStorage.getItem('farm-backups');
+    const list=raw?JSON.parse(raw):[];
+    list.unshift({ts:Date.now(), data:JSON.parse(JSON.stringify(payload))});
+    localStorage.setItem('farm-backups', JSON.stringify(list.slice(0,MAX)));
+  }catch(e){ console.warn('autoBackup error',e); }
+}
+
+function listBackups(){
+  const raw=localStorage.getItem('farm-backups');
+  return raw?JSON.parse(raw):[];
+}
+
+function restoreFromBackup(ts){
+  const list=listBackups();
+  const snap=list.find(b=>b.ts===ts);
+  if(!snap){ showToast('ไม่พบ backup นี้'); return; }
+  const d=new Date(snap.ts);
+  const label=`${d.toLocaleDateString('th-TH')} ${d.toLocaleTimeString('th-TH')}`;
+  if(!confirm(`กู้คืนข้อมูล backup วันที่ ${label}?\n\nข้อมูลปัจจุบันจะถูกแทนที่`)) return;
+  applyLoaded(snap.data);
+  saveState();
+  reRenderActiveTab();
+  showToast('✅ กู้คืนข้อมูลแล้ว');
+}
+
+function renderBackupPanel(){
+  const list=listBackups();
+  if(list.length===0) return '<div style="color:#999;font-size:13px;">ยังไม่มี backup</div>';
+  return list.map(b=>{
+    const d=new Date(b.ts);
+    const label=`${d.toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'2-digit'})} ${d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}`;
+    const gr=(b.data.growthRecords||[]).length;
+    const fr=(b.data.feedRecords||[]).length;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:6px;">
+      <div style="font-size:13px;"><b>${label}</b><br><span style="color:#666;font-size:11px;">สุ่มไซส์ ${gr} รายการ · อาหาร ${fr} วัน</span></div>
+      <button onclick="restoreFromBackup(${b.ts})" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">กู้คืน</button>
+    </div>`;
+  }).join('');
 }
 
 function applyLogo(){
@@ -2781,6 +2835,21 @@ function renderPondsTab(){
   renderUserManageList();
   renderActivityLog();
   renderWanPhraCalendar();
+  const bpWrap = document.getElementById('backupPanelWrap');
+  if(bpWrap) bpWrap.innerHTML = renderBackupPanel();
+}
+
+function downloadBackupJSON(){
+  const payload = JSON.parse(localStorage.getItem('farm-data') || '{}');
+  const d = new Date();
+  const fname = `chanvit-backup-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}.json`;
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = fname;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('✅ ดาวน์โหลด backup แล้ว');
 }
 
 function openPondInfoModal(pondId){
