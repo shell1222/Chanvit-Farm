@@ -1363,13 +1363,13 @@ function reRenderActiveTab(){
 }
 
 let _realtimeStarted = false;
-let _skipNextSnapshot = false;
+let _pauseSnapshotUntil = 0;
 function startRealtimeSync(){
   if(_realtimeStarted) return;
   _realtimeStarted = true;
   db.collection('farms').doc('chanvit').onSnapshot((doc) => {
     if(!doc.exists) return;
-    if(_skipNextSnapshot){ _skipNextSnapshot = false; return; }
+    if(Date.now() < _pauseSnapshotUntil) return;
     applyLoaded(doc.data());
     reRenderActiveTab();
   }, (err) => {
@@ -1479,14 +1479,26 @@ async function restoreFromBackup(ts){
   const snap=list.find(b=>b.ts===ts);
   if(!snap){ showToast('ไม่พบ backup นี้'); return; }
   const d=new Date(snap.ts);
+  const gr=(snap.data.growthRecords||[]).length;
   const label=`${d.toLocaleDateString('th-TH')} ${d.toLocaleTimeString('th-TH')}`;
-  if(!confirm(`กู้คืนข้อมูล backup วันที่ ${label}?\n\nข้อมูลปัจจุบันจะถูกแทนที่`)) return;
-  _skipNextSnapshot = true;
+  if(!confirm(`กู้คืนข้อมูล backup วันที่ ${label}?\nสุ่มไซส์: ${gr} รายการ\n\nข้อมูลปัจจุบันจะถูกแทนที่`)) return;
+  _pauseSnapshotUntil = Date.now() + 20000;
   applyLoaded(snap.data);
-  await saveState();
-  applyLoaded(snap.data); // re-apply หลัง save เผื่อ onSnapshot ล้างทิ้ง
+  try {
+    await db.collection('farms').doc('chanvit').set(snap.data);
+    localStorage.setItem('farm-data', JSON.stringify(snap.data));
+    autoBackup(snap.data);
+  } catch(e) {
+    console.error('restoreFromBackup error:', e);
+    showToast('⚠️ บันทึก Firestore ล้มเหลว: ' + e.message);
+    return;
+  }
+  const filterEl = document.getElementById('growthPondFilter');
+  if(filterEl){ filterEl.innerHTML='<option value="">ทุกบ่อ</option>'; filterEl.value=''; }
   reRenderActiveTab();
-  showToast('✅ กู้คืนข้อมูลแล้ว');
+  const bpWrap=document.getElementById('backupPanelWrap');
+  if(bpWrap) bpWrap.innerHTML=renderBackupPanel();
+  showToast(`✅ กู้คืนแล้ว สุ่มไซส์ ${(STATE.growthRecords||[]).length} รายการ`);
 }
 
 function renderBackupPanel(){
@@ -1507,12 +1519,13 @@ function renderBackupPanel(){
   const recoverBtn = hasRecovered
     ? '<div style="color:#0f6e56;font-size:13px;padding:8px 10px;border:1px solid #a7f3d0;border-radius:8px;background:#ecfdf5;">✅ กู้คืนข้อมูลสุ่มไซส์ 12 รายการแล้ว</div>'
     : `<button onclick="recoverGrowthRecords2026()" style="width:100%;margin-top:4px;background:#b45309;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;">🔄 กู้คืนข้อมูลสุ่มไซส์จากรูปหน้าจอ (12 รายการ: 19,26,29 มิ.ย. · 3 ก.ค.)</button>`;
-  return backupHtml + recoverBtn;
+  const debugBtn = `<button onclick="debugGrowthState()" style="width:100%;margin-top:8px;background:#6b7280;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;cursor:pointer;">🔍 ตรวจสอบข้อมูล (Debug)</button>`;
+  return backupHtml + recoverBtn + debugBtn;
 }
 
 async function recoverGrowthRecords2026(){
   if(!confirm('กู้คืนข้อมูลสุ่มไซส์ 12 รายการจากรูปหน้าจอ?\n\nจะ merge กับข้อมูลที่มีอยู่ (ไม่ลบข้อมูลเดิม)')) return;
-  _skipNextSnapshot = true;
+  _pauseSnapshotUntil = Date.now() + 20000;
   const recovered = [
     {date:'2026-06-19',pondId:'3', age:120,mbw:41.64,pdg:0.36, size:24.02, accFeed:19534},
     {date:'2026-06-19',pondId:'15',age:44, mbw:15.99,pdg:0.38, size:62.54, accFeed:5468},
@@ -1532,12 +1545,33 @@ async function recoverGrowthRecords2026(){
   const newRecs = recovered.filter(r=>!existingKeys.has(`${r.date}|${r.pondId}`));
   const finalRecs = [...existing, ...newRecs].sort((a,b)=>a.date<b.date?1:-1);
   STATE.growthRecords = finalRecs;
-  await saveState();
-  STATE.growthRecords = finalRecs; // re-apply หลัง save เผื่อ onSnapshot ล้างทิ้ง
+  try {
+    await db.collection('farms').doc('chanvit').update({ growthRecords: finalRecs });
+    const lsRaw = localStorage.getItem('farm-data');
+    const lsData = lsRaw ? JSON.parse(lsRaw) : {};
+    lsData.growthRecords = finalRecs;
+    localStorage.setItem('farm-data', JSON.stringify(lsData));
+    autoBackup(lsData);
+  } catch(e) {
+    console.error('recoverGrowthRecords2026 error:', e);
+    showToast('⚠️ บันทึก Firestore ล้มเหลว: ' + e.message);
+    return;
+  }
+  const filterEl = document.getElementById('growthPondFilter');
+  if(filterEl){ filterEl.innerHTML='<option value="">ทุกบ่อ</option>'; filterEl.value=''; }
   reRenderActiveTab();
   const bpWrap=document.getElementById('backupPanelWrap');
   if(bpWrap) bpWrap.innerHTML=renderBackupPanel();
-  showToast(`✅ กู้คืน ${newRecs.length} รายการแล้ว`);
+  showToast(`✅ กู้คืน ${newRecs.length} รายการ (รวม ${finalRecs.length} รายการ)`);
+}
+
+function debugGrowthState(){
+  const gr=(STATE.growthRecords||[]).length;
+  const ls=JSON.parse(localStorage.getItem('farm-data')||'{}');
+  const lsGr=(ls.growthRecords||[]).length;
+  const bk=listBackups();
+  const bkInfo=bk.length ? bk.map((b,i)=>`  backup${i+1}: ${(b.data.growthRecords||[]).length} รายการ`).join('\n') : '  (ไม่มี)';
+  alert(`=== Debug growthRecords ===\nSTATE: ${gr} รายการ\nlocalStorage: ${lsGr} รายการ\nBackups:\n${bkInfo}`);
 }
 
 function applyLogo(){
