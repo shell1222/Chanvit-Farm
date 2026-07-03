@@ -1484,6 +1484,7 @@ async function restoreFromBackup(ts){
   _skipNextSnapshot = true;
   applyLoaded(snap.data);
   await saveState();
+  applyLoaded(snap.data); // re-apply หลัง save เผื่อ onSnapshot ล้างทิ้ง
   reRenderActiveTab();
   showToast('✅ กู้คืนข้อมูลแล้ว');
 }
@@ -1529,8 +1530,10 @@ async function recoverGrowthRecords2026(){
   const existing = STATE.growthRecords||[];
   const existingKeys = new Set(existing.map(r=>`${r.date}|${r.pondId}`));
   const newRecs = recovered.filter(r=>!existingKeys.has(`${r.date}|${r.pondId}`));
-  STATE.growthRecords = [...existing, ...newRecs].sort((a,b)=>a.date<b.date?1:-1);
+  const finalRecs = [...existing, ...newRecs].sort((a,b)=>a.date<b.date?1:-1);
+  STATE.growthRecords = finalRecs;
   await saveState();
+  STATE.growthRecords = finalRecs; // re-apply หลัง save เผื่อ onSnapshot ล้างทิ้ง
   reRenderActiveTab();
   const bpWrap=document.getElementById('backupPanelWrap');
   if(bpWrap) bpWrap.innerHTML=renderBackupPanel();
