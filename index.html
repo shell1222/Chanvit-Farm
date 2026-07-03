@@ -1487,17 +1487,50 @@ function restoreFromBackup(ts){
 
 function renderBackupPanel(){
   const list=listBackups();
-  if(list.length===0) return '<div style="color:#999;font-size:13px;">ยังไม่มี backup</div>';
-  return list.map(b=>{
-    const d=new Date(b.ts);
-    const label=`${d.toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'2-digit'})} ${d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}`;
-    const gr=(b.data.growthRecords||[]).length;
-    const fr=(b.data.feedRecords||[]).length;
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:6px;">
-      <div style="font-size:13px;"><b>${label}</b><br><span style="color:#666;font-size:11px;">สุ่มไซส์ ${gr} รายการ · อาหาร ${fr} วัน</span></div>
-      <button onclick="restoreFromBackup(${b.ts})" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">กู้คืน</button>
-    </div>`;
-  }).join('');
+  const backupHtml = list.length===0
+    ? '<div style="color:#999;font-size:13px;margin-bottom:10px;">ยังไม่มี backup</div>'
+    : list.map(b=>{
+        const d=new Date(b.ts);
+        const label=`${d.toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'2-digit'})} ${d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}`;
+        const gr=(b.data.growthRecords||[]).length;
+        const fr=(b.data.feedRecords||[]).length;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:6px;">
+          <div style="font-size:13px;"><b>${label}</b><br><span style="color:#666;font-size:11px;">สุ่มไซส์ ${gr} รายการ · อาหาร ${fr} วัน</span></div>
+          <button onclick="restoreFromBackup(${b.ts})" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">กู้คืน</button>
+        </div>`;
+      }).join('');
+  const hasRecovered = (STATE.growthRecords||[]).some(r=>r._recovered);
+  const recoverBtn = hasRecovered
+    ? '<div style="color:#0f6e56;font-size:13px;padding:8px 10px;border:1px solid #a7f3d0;border-radius:8px;background:#ecfdf5;">✅ กู้คืนข้อมูลสุ่มไซส์ 12 รายการแล้ว</div>'
+    : `<button onclick="recoverGrowthRecords2026()" style="width:100%;margin-top:4px;background:#b45309;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;">🔄 กู้คืนข้อมูลสุ่มไซส์จากรูปหน้าจอ (12 รายการ: 19,26,29 มิ.ย. · 3 ก.ค.)</button>`;
+  return backupHtml + recoverBtn;
+}
+
+async function recoverGrowthRecords2026(){
+  if(!confirm('กู้คืนข้อมูลสุ่มไซส์ 12 รายการจากรูปหน้าจอ?\n\nจะ merge กับข้อมูลที่มีอยู่ (ไม่ลบข้อมูลเดิม)')) return;
+  const recovered = [
+    {date:'2026-06-19',pondId:'3', age:120,mbw:41.64,pdg:0.36, size:24.02, accFeed:19534},
+    {date:'2026-06-19',pondId:'15',age:44, mbw:15.99,pdg:0.38, size:62.54, accFeed:5468},
+    {date:'2026-06-19',pondId:'8', age:44, mbw:14.5, pdg:0.37, size:68.96, accFeed:1470},
+    {date:'2026-06-26',pondId:'16',age:27, mbw:6.68, pdg:null, size:149.68,accFeed:1725},
+    {date:'2026-06-26',pondId:'8', age:23, mbw:18.31,pdg:0.46, size:54.61, accFeed:2270},
+    {date:'2026-06-26',pondId:'15',age:52, mbw:20.4, pdg:0.71, size:49.01, accFeed:6488},
+    {date:'2026-06-29',pondId:'16',age:30, mbw:7.85, pdg:0.39, size:127.38,accFeed:2055},
+    {date:'2026-06-29',pondId:'15',age:55, mbw:21.61,pdg:0.4,  size:46.28, accFeed:7188},
+    {date:'2026-06-29',pondId:'8', age:55, mbw:20.68,pdg:0.79, size:48.36, accFeed:2620},
+    {date:'2026-07-03',pondId:'16',age:34, mbw:9.58, pdg:0.43, size:104.42,accFeed:2925},
+    {date:'2026-07-03',pondId:'8', age:59, mbw:22.22,pdg:0.38, size:45.01, accFeed:2860},
+    {date:'2026-07-03',pondId:'15',age:59, mbw:24.66,pdg:0.76, size:40.56, accFeed:7888},
+  ].map(r=>({...r, weightWithBasket:null, basketWeight:null, shrimpCountPairs:null, feed:null, user:'เชลล์', ts:Date.now(), _recovered:true}));
+  const existing = STATE.growthRecords||[];
+  const existingKeys = new Set(existing.map(r=>`${r.date}|${r.pondId}`));
+  const newRecs = recovered.filter(r=>!existingKeys.has(`${r.date}|${r.pondId}`));
+  STATE.growthRecords = [...existing, ...newRecs].sort((a,b)=>a.date<b.date?1:-1);
+  await saveState();
+  reRenderActiveTab();
+  const bpWrap=document.getElementById('backupPanelWrap');
+  if(bpWrap) bpWrap.innerHTML=renderBackupPanel();
+  showToast(`✅ กู้คืน ${newRecs.length} รายการแล้ว`);
 }
 
 function applyLogo(){
