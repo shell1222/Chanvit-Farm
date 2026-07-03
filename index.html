@@ -1363,11 +1363,13 @@ function reRenderActiveTab(){
 }
 
 let _realtimeStarted = false;
+let _skipNextSnapshot = false;
 function startRealtimeSync(){
   if(_realtimeStarted) return;
   _realtimeStarted = true;
   db.collection('farms').doc('chanvit').onSnapshot((doc) => {
     if(!doc.exists) return;
+    if(_skipNextSnapshot){ _skipNextSnapshot = false; return; }
     applyLoaded(doc.data());
     reRenderActiveTab();
   }, (err) => {
@@ -1472,15 +1474,16 @@ function listBackups(){
   return raw?JSON.parse(raw):[];
 }
 
-function restoreFromBackup(ts){
+async function restoreFromBackup(ts){
   const list=listBackups();
   const snap=list.find(b=>b.ts===ts);
   if(!snap){ showToast('ไม่พบ backup นี้'); return; }
   const d=new Date(snap.ts);
   const label=`${d.toLocaleDateString('th-TH')} ${d.toLocaleTimeString('th-TH')}`;
   if(!confirm(`กู้คืนข้อมูล backup วันที่ ${label}?\n\nข้อมูลปัจจุบันจะถูกแทนที่`)) return;
+  _skipNextSnapshot = true;
   applyLoaded(snap.data);
-  saveState();
+  await saveState();
   reRenderActiveTab();
   showToast('✅ กู้คืนข้อมูลแล้ว');
 }
@@ -1508,6 +1511,7 @@ function renderBackupPanel(){
 
 async function recoverGrowthRecords2026(){
   if(!confirm('กู้คืนข้อมูลสุ่มไซส์ 12 รายการจากรูปหน้าจอ?\n\nจะ merge กับข้อมูลที่มีอยู่ (ไม่ลบข้อมูลเดิม)')) return;
+  _skipNextSnapshot = true;
   const recovered = [
     {date:'2026-06-19',pondId:'3', age:120,mbw:41.64,pdg:0.36, size:24.02, accFeed:19534},
     {date:'2026-06-19',pondId:'15',age:44, mbw:15.99,pdg:0.38, size:62.54, accFeed:5468},
