@@ -2038,13 +2038,13 @@ function loadPondGrowthInfo(){
   if(prevWithAcc){
     const base = parseFloat(prevWithAcc.accFeed)||0;
     const feedAfter = STATE.feedRecords.reduce((s,r)=>
-      r.date>prevWithAcc.date && r.date<=growthDate && r.entries && r.entries[pondId]!==undefined
+      r.date>=prevWithAcc.date && r.date<growthDate && r.entries && r.entries[pondId]!==undefined
         ?s+(parseFloat(r.entries[pondId])||0):s, 0);
     totalFeed = base + feedAfter;
   } else {
     const releaseDate = ps2 && ps2.releaseDate ? ps2.releaseDate : null;
     totalFeed = STATE.feedRecords.reduce((s,r)=>
-      r.date<=growthDate && (!releaseDate || r.date>=releaseDate) && r.entries && r.entries[pondId]!==undefined
+      r.date<growthDate && (!releaseDate || r.date>=releaseDate) && r.entries && r.entries[pondId]!==undefined
         ?s+(parseFloat(r.entries[pondId])||0):s, 0);
   }
 
