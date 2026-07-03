@@ -2009,7 +2009,10 @@ function renderGrowthTab(){
   if(!dateInput.value) dateInput.value = todayStr();
 
   const pondSelect = document.getElementById('growthPond');
-  pondSelect.innerHTML = STATE.ponds.filter(p=>!p.id.startsWith('T')&&!p.id.startsWith('KC')).map(p=>`<option value="${p.id}">บ่อ ${p.id}</option>`).join('');
+  pondSelect.innerHTML = STATE.ponds.filter(p=>{
+    const ps = STATE.pondStatus[p.id];
+    return ps && ps.status === 'active';
+  }).map(p=>`<option value="${p.id}">บ่อ ${p.id}</option>`).join('');
 
   loadPondGrowthInfo();
   renderGrowthRecentTable();
@@ -2039,8 +2042,9 @@ function loadPondGrowthInfo(){
         ?s+(parseFloat(r.entries[pondId])||0):s, 0);
     totalFeed = base + feedAfter;
   } else {
+    const releaseDate = ps2 && ps2.releaseDate ? ps2.releaseDate : null;
     totalFeed = STATE.feedRecords.reduce((s,r)=>
-      r.date<=growthDate && r.entries && r.entries[pondId]!==undefined
+      r.date<=growthDate && (!releaseDate || r.date>=releaseDate) && r.entries && r.entries[pondId]!==undefined
         ?s+(parseFloat(r.entries[pondId])||0):s, 0);
   }
 
@@ -2053,10 +2057,13 @@ function loadPondGrowthInfo(){
 
   const ageEl = document.getElementById('growthAge');
   const ps2 = STATE.pondStatus[pondId];
-  if(ps2 && ps2.releaseDate){
-    const rel = new Date(ps2.releaseDate + 'T00:00:00');
-    const cur = new Date(growthDate + 'T00:00:00');
-    const diff = Math.round((cur - rel) / 86400000);
+  if(history.length > 0){
+    const lastSample = history[0];
+    const daysSince = Math.round((new Date(growthDate+'T00:00:00') - new Date(lastSample.date+'T00:00:00')) / 86400000);
+    if(daysSince > 0) ageEl.value = parseInt(lastSample.age) + daysSince;
+    else ageEl.value = lastSample.age;
+  } else if(ps2 && ps2.releaseDate){
+    const diff = Math.round((new Date(growthDate+'T00:00:00') - new Date(ps2.releaseDate+'T00:00:00')) / 86400000);
     if(diff > 0) ageEl.value = diff;
   } else {
     ageEl.value = '';
