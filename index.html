@@ -711,6 +711,7 @@
         <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:14px;height:14px;border-radius:4px;background:#8B5E3C;display:inline-block;"></span> บ่อพักน้ำ</span>
       </p>
       <div id="pondMapWrap" style="width:100%;"></div>
+      <div id="pondMapStats" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;"></div>
       <p class="hint" style="margin-top:8px;">แตะที่บ่อเพื่อดู/แก้ไขสถานะ</p>
     </div>
 
@@ -2441,6 +2442,17 @@ function renderPondMap(){
 
   svg += '</svg>';
   wrap.innerHTML = svg;
+
+  const activePonds = STATE.ponds.filter(p => STATE.pondStatus[p.id] && STATE.pondStatus[p.id].status === 'active');
+  const activeArea = activePonds.reduce((s, p) => s + (parseFloat(p.area) || 0), 0);
+  const emptyPonds = STATE.ponds.filter(p => !STATE.pondStatus[p.id] || STATE.pondStatus[p.id].status !== 'active');
+  const statsEl = document.getElementById('pondMapStats');
+  if(statsEl){
+    statsEl.innerHTML = `
+      <span class="badge green" style="font-size:13px;padding:6px 12px;">🟢 กำลังเลี้ยง ${activePonds.length} บ่อ &nbsp;·&nbsp; ${activeArea.toFixed(1)} ไร่</span>
+      <span class="badge" style="font-size:13px;padding:6px 12px;background:#f3f4f6;color:#666;">⬜ ว่าง / ปิด ${emptyPonds.length} บ่อ</span>
+    `;
+  }
 }
 
 let selectedPondId = null;
