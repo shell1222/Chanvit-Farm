@@ -2880,23 +2880,36 @@ function renderWanPhraCalendar(){
   const yr=today.getFullYear(), cm=today.getMonth();
   const MONTHS=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
   const DAYS=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  // ย้อนกลับ 7 วัน เพื่อโชว์วันพระสัปดาห์ก่อน
+  const sevenDaysAgo=new Date(today); sevenDaysAgo.setDate(sevenDaysAgo.getDate()-7);
+  const startMo=sevenDaysAgo.getMonth(), startYr=sevenDaysAgo.getFullYear();
+  // รวบรวมเดือนที่ต้องแสดง
+  const moList=[];
+  if(startMo!==cm||startYr!==yr) moList.push({moYr:startYr,mo:startMo});
+  for(let mo=cm;mo<12;mo++) moList.push({moYr:yr,mo});
   let html='<div style="display:flex;flex-direction:column;gap:24px;">';
-  for(let mo=cm;mo<12;mo++){
-    const first=new Date(yr,mo,1), last=new Date(yr,mo+1,0);
+  for(const {moYr,mo} of moList){
+    const first=new Date(moYr,mo,1), last=new Date(moYr,mo+1,0);
     const startDow=first.getDay();
     html+=`<div>
-      <div style="font-size:14px;font-weight:800;color:var(--primary-dark);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary-light);">${MONTHS[mo]} ${yr+543}</div>
+      <div style="font-size:14px;font-weight:800;color:var(--primary-dark);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--primary-light);">${MONTHS[mo]} ${moYr+543}</div>
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center;">`;
     DAYS.forEach((d,i)=>{ html+=`<div style="font-size:11px;font-weight:700;padding:4px 0;color:${i===0||i===6?'#ef4444':'var(--text-secondary)'};">${d}</div>`; });
     for(let i=0;i<startDow;i++) html+='<div></div>';
     for(let d=1;d<=last.getDate();d++){
-      const dt=new Date(yr,mo,d);
+      const dt=new Date(moYr,mo,d);
       const dow=dt.getDay();
       const isToday=dt.getTime()===today.getTime();
       const isPast=dt<today;
+      const isTooOld=dt<sevenDaysAgo;
       const wanPhra=isWanPhra(dt);
       const isWeekend=dow===0||dow===6;
-      let innerStyle, textColor;
+      // วันที่เกิน 7 วันแล้ว: แสดงเป็นช่องว่าง (คงเส้นกริด)
+      if(isTooOld){
+        html+=`<div style="display:flex;align-items:center;justify-content:center;padding:2px 0;"><div style="width:30px;height:30px;"></div></div>`;
+        continue;
+      }
+      let innerStyle;
       if(isToday){
         innerStyle=`background:var(--primary);color:#fff;font-weight:800;box-shadow:0 2px 8px rgba(0,128,96,0.35);`;
       } else if(wanPhra){
@@ -2906,7 +2919,7 @@ function renderWanPhraCalendar(){
           innerStyle=`background:#fde68a;color:#78350f;font-weight:700;border:2px solid #f59e0b;box-shadow:0 2px 6px rgba(245,158,11,0.3);`;
         }
       } else {
-        textColor=isPast?'#ccc':isWeekend?'#ef4444':'var(--text)';
+        const textColor=isPast?'#ccc':isWeekend?'#ef4444':'var(--text)';
         innerStyle=`color:${textColor};font-weight:${isWeekend?600:400};`;
       }
       html+=`<div style="display:flex;align-items:center;justify-content:center;padding:2px 0;"><div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;${innerStyle}">${d}</div></div>`;
