@@ -1422,17 +1422,23 @@ async function saveState(){
     feedMixItems: STATE.feedMixItems || []
   };
   try{
-    localStorage.setItem('farm-data', JSON.stringify(payload));
     const cloudDoc = await db.collection('farms').doc('chanvit').get();
     if(cloudDoc.exists){
       const cd = cloudDoc.data();
+      // merge feedRecords: เก็บรายการที่ bot บันทึกแต่ยังไม่อยู่ใน STATE
       const stFeed = new Set(payload.feedRecords.map(r=>r.date));
-      const stWater = new Set(payload.waterRecords.map(r=>`${r.date}|${r.pondId}|${r.period}`));
       const extraFeed = (cd.feedRecords||[]).filter(r=>r.date && !stFeed.has(r.date));
-      const extraWater = (cd.waterRecords||[]).filter(r=>r.date && !stWater.has(`${r.date}|${r.pondId}|${r.period}`));
       if(extraFeed.length) payload.feedRecords = [...payload.feedRecords, ...extraFeed];
+      // merge waterRecords
+      const stWater = new Set(payload.waterRecords.map(r=>`${r.date}|${r.pondId}|${r.period}`));
+      const extraWater = (cd.waterRecords||[]).filter(r=>r.date && !stWater.has(`${r.date}|${r.pondId}|${r.period}`));
       if(extraWater.length) payload.waterRecords = [...payload.waterRecords, ...extraWater];
+      // merge growthRecords: ป้องกันข้อมูลสุ่มไซส์หายเมื่อ STATE ยังไม่โหลด
+      const stGrowth = new Set(payload.growthRecords.map(r=>`${r.date}|${r.pondId}`));
+      const extraGrowth = (cd.growthRecords||[]).filter(r=>r.date && r.pondId && !stGrowth.has(`${r.date}|${r.pondId}`));
+      if(extraGrowth.length) payload.growthRecords = [...payload.growthRecords, ...extraGrowth];
     }
+    localStorage.setItem('farm-data', JSON.stringify(payload));
     await db.collection('farms').doc('chanvit').set(payload);
   }catch(e){
     console.error('saveState error', e);
