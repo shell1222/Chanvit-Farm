@@ -3053,11 +3053,6 @@ function renderWanPhraCalendar(){
       const isTooOld=dt<sevenDaysAgo;
       const wanPhra=isWanPhra(dt);
       const isWeekend=dow===0||dow===6;
-      // วันที่เกิน 7 วันแล้ว: แสดงเป็นช่องว่าง (คงเส้นกริด)
-      if(isTooOld){
-        html+=`<div style="display:flex;align-items:center;justify-content:center;padding:2px 0;"><div style="width:30px;height:30px;"></div></div>`;
-        continue;
-      }
       let innerStyle;
       if(isToday){
         innerStyle=`background:var(--primary);color:#fff;font-weight:800;box-shadow:0 2px 8px rgba(0,128,96,0.35);`;
