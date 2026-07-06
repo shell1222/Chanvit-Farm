@@ -5003,9 +5003,10 @@ function lookupFeedCeiling(releaseDate, feedDate, population, mbwOverride){
   return +(feedPer100k / 100000 * population).toFixed(2);
 }
 function getEffectivePop(ps, feedDate){
-  if(!ps || !ps.population) return null;
+  if(!ps) return null;
   // Weekly import overrides calculated pop for all chart dates (keeps ceiling line consistent)
   if(ps.weeklyFeedPop) return parseFloat(ps.weeklyFeedPop);
+  if(!ps.population) return null;
   let pop = parseFloat(ps.population);
   if(ps.partial1Date && feedDate >= ps.partial1Date && ps.partial1 && ps.partial1Size)
     pop -= parseFloat(ps.partial1) * parseFloat(ps.partial1Size);
@@ -5489,9 +5490,9 @@ function handleExcelImport(input){
         const today2 = new Date().toISOString().slice(0,10);
         wkRows.forEach(row=>{
           const pid = row[0];
-          const feedPop = row[5]; // col F = ยอดกุ้งที่ใช้เดินอาหาร
+          const feedPop = row[5]; // col F = ยอดกุ้งที่ใช้เดินอาหาร (upper section)
           if(typeof pid!=='number'||!Number.isInteger(pid)||pid<1) return;
-          if(typeof feedPop!=='number'||feedPop<=0) return;
+          if(typeof feedPop!=='number'||feedPop<10000) return; // skip age/small values from lower section
           const key = String(pid);
           if(!STATE.pondStatus[key]) STATE.pondStatus[key]={};
           STATE.pondStatus[key].weeklyFeedPop = feedPop;
