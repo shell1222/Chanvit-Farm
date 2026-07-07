@@ -1160,16 +1160,12 @@
           <div class="field">
             <label>หมวด</label>
             <select id="pmCategory">
-              <option value="feed">อาหาร</option>
-              <option value="postlarva">ลูกกุ้ง</option>
-              <option value="chemical">เคมีภัณฑ์</option>
-              <option value="fuel">ค่าน้ำมัน</option>
-              <option value="electricity">ค่าไฟ</option>
-              <option value="laborPercent">เปอร์เซ็นต์ลูกน้อง</option>
-              <option value="laborSalary">เงินเดือนลูกน้อง</option>
-              <option value="pipePa">ค่าท่อพาเชี่ยล</option>
-              <option value="pipeClose">ค่าท่อปิดบ่อ</option>
+              <option value="water_cond">สารปรับสภาพน้ำ</option>
+              <option value="chemical_dis">เคมีภัณฑ์และสารฆ่าเชื้อ</option>
+              <option value="microbe">จุลินทรีย์</option>
+              <option value="supplement">อาหารเสริม</option>
               <option value="other">อื่นๆ</option>
+              <option value="equipment">อุปกรณ์บ่อ</option>
             </select>
           </div>
           <div class="field">
@@ -1206,30 +1202,24 @@
           </div>
           <input type="text" id="pmSearch" placeholder="ค้นหาชื่อสินค้า..." style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:8px;" oninput="renderProductTable()">
           <div id="pmCatBtns" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
-            <button onclick="setPmCatFilter('')"  id="pmBtn_all"         class="pm-cat-btn active" style="--cc:#64748b;">ทุกหมวด</button>
-            <button onclick="setPmCatFilter('feed')"         id="pmBtn_feed"        class="pm-cat-btn" style="--cc:#22c55e;">อาหาร</button>
-            <button onclick="setPmCatFilter('postlarva')"    id="pmBtn_postlarva"   class="pm-cat-btn" style="--cc:#f97316;">ลูกกุ้ง</button>
-            <button onclick="setPmCatFilter('chemical')"     id="pmBtn_chemical"    class="pm-cat-btn" style="--cc:#3b82f6;">เคมีภัณฑ์</button>
-            <button onclick="setPmCatFilter('fuel')"         id="pmBtn_fuel"        class="pm-cat-btn" style="--cc:#06b6d4;">น้ำมัน</button>
-            <button onclick="setPmCatFilter('electricity')"  id="pmBtn_electricity" class="pm-cat-btn" style="--cc:#eab308;">ค่าไฟ</button>
-            <button onclick="setPmCatFilter('laborPercent')" id="pmBtn_laborPercent" class="pm-cat-btn" style="--cc:#a855f7;">%ลูกน้อง</button>
-            <button onclick="setPmCatFilter('laborSalary')"  id="pmBtn_laborSalary"  class="pm-cat-btn" style="--cc:#c084fc;">เงินเดือน</button>
-            <button onclick="setPmCatFilter('other')"        id="pmBtn_other"       class="pm-cat-btn" style="--cc:#94a3b8;">อื่นๆ</button>
+            <button onclick="setPmCatFilter('')"              id="pmBtn_all"         class="pm-cat-btn active" style="--cc:#64748b;">ทุกหมวด</button>
+            <button onclick="setPmCatFilter('water_cond')"    id="pmBtn_water_cond"  class="pm-cat-btn" style="--cc:#0ea5e9;">สารปรับสภาพน้ำ</button>
+            <button onclick="setPmCatFilter('chemical_dis')"  id="pmBtn_chemical_dis" class="pm-cat-btn" style="--cc:#ef4444;">เคมีภัณฑ์และสารฆ่าเชื้อ</button>
+            <button onclick="setPmCatFilter('microbe')"       id="pmBtn_microbe"     class="pm-cat-btn" style="--cc:#22c55e;">จุลินทรีย์</button>
+            <button onclick="setPmCatFilter('supplement')"    id="pmBtn_supplement"  class="pm-cat-btn" style="--cc:#f59e0b;">อาหารเสริม</button>
+            <button onclick="setPmCatFilter('other')"         id="pmBtn_other"       class="pm-cat-btn" style="--cc:#94a3b8;">อื่นๆ</button>
+            <button onclick="setPmCatFilter('equipment')"     id="pmBtn_equipment"   class="pm-cat-btn" style="--cc:#78716c;">อุปกรณ์บ่อ</button>
           </div>
           <div style="display:none;">
             <!-- compat: keep pmCatFilter value available for JS -->
             <select id="pmCatFilter" onchange="renderProductTable()">
               <option value="">ทุกหมวด</option>
-              <option value="feed">อาหาร</option>
-              <option value="postlarva">ลูกกุ้ง</option>
-              <option value="chemical">เคมีภัณฑ์</option>
-              <option value="fuel">ค่าน้ำมัน</option>
-              <option value="electricity">ค่าไฟ</option>
-              <option value="laborPercent">เปอร์เซ็นต์ลูกน้อง</option>
-              <option value="laborSalary">เงินเดือนลูกน้อง</option>
-              <option value="pipePa">ค่าท่อพาเชี่ยล</option>
-              <option value="pipeClose">ค่าท่อปิดบ่อ</option>
+              <option value="water_cond">สารปรับสภาพน้ำ</option>
+              <option value="chemical_dis">เคมีภัณฑ์และสารฆ่าเชื้อ</option>
+              <option value="microbe">จุลินทรีย์</option>
+              <option value="supplement">อาหารเสริม</option>
               <option value="other">อื่นๆ</option>
+              <option value="equipment">อุปกรณ์บ่อ</option>
             </select>
           </div>
         </div>
@@ -4554,13 +4544,19 @@ const COST_CAT_LABELS = {
   postlarva:'ลูกกุ้ง', feed:'อาหาร', chemical:'เคมีภัณฑ์',
   electricity:'ค่าไฟ', laborPercent:'เปอร์เซ็นต์ลูกน้อง',
   laborSalary:'เงินเดือนลูกน้อง', fuel:'ค่าน้ำมัน',
-  pipePa:'ค่าท่อ', pipeClose:'ค่าท่อปิดบ่อ', partial:'ค่าพาเชี่ยล', mudPump:'ค่าฉีดเลน', other:'อื่นๆ'
+  pipePa:'ค่าท่อ', pipeClose:'ค่าท่อปิดบ่อ', partial:'ค่าพาเชี่ยล', mudPump:'ค่าฉีดเลน', other:'อื่นๆ',
+  // product catalog categories
+  water_cond:'สารปรับสภาพน้ำ', chemical_dis:'เคมีภัณฑ์และสารฆ่าเชื้อ',
+  microbe:'จุลินทรีย์', supplement:'อาหารเสริม', equipment:'อุปกรณ์บ่อ'
 };
 const COST_CAT_COLORS = {
   feed:'#22c55e', postlarva:'#f97316', chemical:'#3b82f6',
   electricity:'#eab308', laborPercent:'#a855f7', laborSalary:'#c084fc',
   fuel:'#06b6d4', pipePa:'#14b8a6', pipeClose:'#0891b2',
-  partial:'#f43f5e', mudPump:'#fb923c', other:'#94a3b8'
+  partial:'#f43f5e', mudPump:'#fb923c', other:'#94a3b8',
+  // product catalog categories
+  water_cond:'#0ea5e9', chemical_dis:'#ef4444', microbe:'#22c55e',
+  supplement:'#f59e0b', equipment:'#78716c'
 };
 
 let costSelectedPond = null;
@@ -5024,9 +5020,9 @@ function renderProductTable(){
   }
 
   const CAT_OPTS = [
-    ['feed','อาหาร'],['postlarva','ลูกกุ้ง'],['chemical','เคมีภัณฑ์'],
-    ['fuel','น้ำมัน'],['electricity','ค่าไฟ'],['laborPercent','%ลูกน้อง'],
-    ['laborSalary','เงินเดือน'],['pipePa','ท่อพาเชียล'],['pipeClose','ท่อปิดบ่อ'],['other','อื่นๆ']
+    ['water_cond','สารปรับสภาพน้ำ'],['chemical_dis','เคมีภัณฑ์และสารฆ่าเชื้อ'],
+    ['microbe','จุลินทรีย์'],['supplement','อาหารเสริม'],
+    ['other','อื่นๆ'],['equipment','อุปกรณ์บ่อ']
   ];
   const ROW_COLS = (p, realIdx, i) => {
     const isEditing = realIdx === _editProductIdx;
@@ -5061,7 +5057,7 @@ function renderProductTable(){
 
   if(!q && !catFilter){
     // ── จัดกลุ่มตามหมวดหมู่ ──
-    const CAT_ORDER = ['feed','postlarva','chemical','electricity','laborPercent','laborSalary','fuel','pipePa','pipeClose','other'];
+    const CAT_ORDER = ['water_cond','chemical_dis','microbe','supplement','other','equipment'];
     const groups = {};
     filtered.forEach(p => {
       const cat = p.category || 'other';
