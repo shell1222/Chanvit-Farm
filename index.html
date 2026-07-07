@@ -5023,11 +5023,25 @@ function renderProductTable(){
     return;
   }
 
+  const CAT_OPTS = [
+    ['feed','อาหาร'],['postlarva','ลูกกุ้ง'],['chemical','เคมีภัณฑ์'],
+    ['fuel','น้ำมัน'],['electricity','ค่าไฟ'],['laborPercent','%ลูกน้อง'],
+    ['laborSalary','เงินเดือน'],['pipePa','ท่อพาเชียล'],['pipeClose','ท่อปิดบ่อ'],['other','อื่นๆ']
+  ];
   const ROW_COLS = (p, realIdx, i) => {
     const isEditing = realIdx === _editProductIdx;
+    const cat   = p.category || 'other';
+    const cc    = COST_CAT_COLORS[cat] || '#94a3b8';
+    const opts  = CAT_OPTS.map(([v,l]) => `<option value="${v}"${v===cat?' selected':''}>${l}</option>`).join('');
     return `<tr style="${isEditing ? 'background:#eff6ff;' : ''}">
-      <td style="color:var(--text-secondary);font-size:11px;text-align:center;">${i+1}</td>
+      <td style="color:var(--text-secondary);font-size:11px;text-align:center;">${i}</td>
       <td style="font-weight:${isEditing ? '700' : '500'};">${p.name}</td>
+      <td style="width:96px;">
+        <select onchange="quickChangeCat(${realIdx},this.value)"
+          style="background:${cc}1a;color:${cc};border:1.5px solid ${cc}55;border-radius:10px;padding:2px 5px;font-size:11px;font-weight:600;cursor:pointer;max-width:92px;">
+          ${opts}
+        </select>
+      </td>
       <td style="text-align:right;">${p.priceUnit != null ? Number(p.priceUnit).toLocaleString('th-TH') : '-'}</td>
       <td style="color:var(--text-secondary);">${p.unit || '-'}</td>
       <td style="text-align:center;white-space:nowrap;">
@@ -5038,10 +5052,11 @@ function renderProductTable(){
   };
 
   const FLAT_HDR = `<table class="pm-table"><thead><tr>
-    <th style="width:32px;">#</th><th>ชื่อสินค้า</th>
+    <th style="width:28px;">#</th><th>ชื่อสินค้า</th>
+    <th style="width:96px;">หมวด</th>
     <th style="width:78px;text-align:right;">ราคา/หน่วย</th>
-    <th style="width:60px;">หน่วย</th>
-    <th style="width:72px;text-align:center;">จัดการ</th>
+    <th style="width:54px;">หน่วย</th>
+    <th style="width:66px;text-align:center;">จัดการ</th>
   </tr></thead><tbody>`;
 
   if(!q && !catFilter){
@@ -5071,34 +5086,22 @@ function renderProductTable(){
     });
     document.getElementById('productTable').innerHTML = html;
   } else {
-    // ── แสดงแบบ flat พร้อม badge หมวด ──
-    let html = `<table class="pm-table"><thead><tr>
-      <th style="width:32px;">#</th><th>ชื่อสินค้า</th>
-      <th style="width:76px;">หมวด</th>
-      <th style="width:78px;text-align:right;">ราคา/หน่วย</th>
-      <th style="width:60px;">หน่วย</th>
-      <th style="width:72px;text-align:center;">จัดการ</th>
-    </tr></thead><tbody>`;
+    // ── แสดงแบบ flat (ค้นหา/กรอง) ──
+    let html = FLAT_HDR;
     filtered.forEach((p, i) => {
-      const realIdx = catalog.indexOf(p);
-      const isEditing = realIdx === _editProductIdx;
-      const cat = p.category || 'other';
-      const color = COST_CAT_COLORS[cat] || '#94a3b8';
-      html += `<tr style="${isEditing ? 'background:#eff6ff;' : ''}">
-        <td style="color:var(--text-secondary);font-size:11px;text-align:center;">${i+1}</td>
-        <td style="font-weight:${isEditing ? '700' : '500'};">${p.name}</td>
-        <td><span style="background:${color}20;color:${color};border-radius:6px;padding:2px 6px;font-size:11px;font-weight:600;white-space:nowrap;">${COST_CAT_LABELS[cat]||cat}</span></td>
-        <td style="text-align:right;">${p.priceUnit != null ? Number(p.priceUnit).toLocaleString('th-TH') : '-'}</td>
-        <td style="color:var(--text-secondary);">${p.unit || '-'}</td>
-        <td style="text-align:center;white-space:nowrap;">
-          <button class="btn-icon-sm" onclick="editProduct(${realIdx})" title="แก้ไข" style="color:#2563eb;">✏️</button>
-          <button class="btn-icon-sm danger" onclick="deleteProduct(${realIdx})" title="ลบ">🗑️</button>
-        </td>
-      </tr>`;
+      html += ROW_COLS(p, catalog.indexOf(p), i+1);
     });
     html += '</tbody></table>';
     document.getElementById('productTable').innerHTML = html;
   }
+}
+
+function quickChangeCat(idx, newCat){
+  if(!STATE.productCatalog || !STATE.productCatalog[idx]) return;
+  STATE.productCatalog[idx].category = newCat;
+  saveState();
+  renderProductTable();
+  showToast('เปลี่ยนหมวด "' + STATE.productCatalog[idx].name + '" เป็น ' + (COST_CAT_LABELS[newCat]||newCat));
 }
 
 function addProductToDb(){
