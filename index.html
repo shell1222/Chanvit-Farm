@@ -1197,9 +1197,26 @@
 
       <!-- ตารางรายการสินค้า -->
       <div style="margin-top:14px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div class="section-title" style="margin:0;">รายการทั้งหมด (<span id="pmCount">0</span> รายการ)</div>
-          <input type="text" id="pmSearch" placeholder="ค้นหา..." style="width:150px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" oninput="renderProductTable()">
+        <div style="margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div class="section-title" style="margin:0;">รายการทั้งหมด (<span id="pmCount">0</span> รายการ)</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <input type="text" id="pmSearch" placeholder="ค้นหาชื่อสินค้า..." style="flex:1;min-width:120px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" oninput="renderProductTable()">
+            <select id="pmCatFilter" style="padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);" onchange="renderProductTable()">
+              <option value="">ทุกหมวด</option>
+              <option value="feed">อาหาร</option>
+              <option value="postlarva">ลูกกุ้ง</option>
+              <option value="chemical">เคมีภัณฑ์</option>
+              <option value="fuel">ค่าน้ำมัน</option>
+              <option value="electricity">ค่าไฟ</option>
+              <option value="laborPercent">เปอร์เซ็นต์ลูกน้อง</option>
+              <option value="laborSalary">เงินเดือนลูกน้อง</option>
+              <option value="pipePa">ค่าท่อพาเชี่ยล</option>
+              <option value="pipeClose">ค่าท่อปิดบ่อ</option>
+              <option value="other">อื่นๆ</option>
+            </select>
+          </div>
         </div>
         <div id="productTable" class="pm-table-wrap"></div>
       </div>
@@ -4965,9 +4982,13 @@ function cancelEditProduct(){
 }
 
 function renderProductTable(){
-  const q = (document.getElementById('pmSearch').value || '').toLowerCase().trim();
-  const catalog = STATE.productCatalog || [];
-  const filtered = q ? catalog.filter(function(p){ return p.name.toLowerCase().indexOf(q) !== -1; }) : catalog;
+  const q         = (document.getElementById('pmSearch')?.value || '').toLowerCase().trim();
+  const catFilter = document.getElementById('pmCatFilter')?.value || '';
+  const catalog   = STATE.productCatalog || [];
+
+  let filtered = catalog;
+  if(q)         filtered = filtered.filter(p => p.name.toLowerCase().includes(q));
+  if(catFilter) filtered = filtered.filter(p => (p.category || 'other') === catFilter);
 
   const countEl = document.getElementById('pmCount');
   if(countEl) countEl.textContent = catalog.length;
@@ -4977,31 +4998,82 @@ function renderProductTable(){
     return;
   }
 
-  let html = '<table class="pm-table"><thead><tr>'
-    + '<th style="width:32px;">#</th>'
-    + '<th>ชื่อสินค้า</th>'
-    + '<th style="width:90px;text-align:right;">ราคา/หน่วย</th>'
-    + '<th style="width:70px;">หน่วย</th>'
-    + '<th style="width:72px;text-align:center;">จัดการ</th>'
-    + '</tr></thead><tbody>';
-
-  filtered.forEach(function(p, i){
-    const realIdx = catalog.indexOf(p);
+  const ROW_COLS = (p, realIdx, i) => {
     const isEditing = realIdx === _editProductIdx;
-    html += '<tr style="' + (isEditing ? 'background:#eff6ff;' : '') + '">'
-      + '<td style="color:var(--text-secondary);font-size:11px;text-align:center;">' + (i+1) + '</td>'
-      + '<td style="font-weight:' + (isEditing ? '700' : '500') + ';">' + p.name + '</td>'
-      + '<td style="text-align:right;">' + (p.priceUnit != null ? Number(p.priceUnit).toLocaleString('th-TH') : '-') + '</td>'
-      + '<td style="color:var(--text-secondary);">' + (p.unit || '-') + '</td>'
-      + '<td style="text-align:center;white-space:nowrap;">'
-        + '<button class="btn-icon-sm" onclick="editProduct(' + realIdx + ')" title="แก้ไข" style="color:#2563eb;">✏️</button>'
-        + ' <button class="btn-icon-sm danger" onclick="deleteProduct(' + realIdx + ')" title="ลบ">🗑️</button>'
-      + '</td>'
-      + '</tr>';
-  });
+    return `<tr style="${isEditing ? 'background:#eff6ff;' : ''}">
+      <td style="color:var(--text-secondary);font-size:11px;text-align:center;">${i+1}</td>
+      <td style="font-weight:${isEditing ? '700' : '500'};">${p.name}</td>
+      <td style="text-align:right;">${p.priceUnit != null ? Number(p.priceUnit).toLocaleString('th-TH') : '-'}</td>
+      <td style="color:var(--text-secondary);">${p.unit || '-'}</td>
+      <td style="text-align:center;white-space:nowrap;">
+        <button class="btn-icon-sm" onclick="editProduct(${realIdx})" title="แก้ไข" style="color:#2563eb;">✏️</button>
+        <button class="btn-icon-sm danger" onclick="deleteProduct(${realIdx})" title="ลบ">🗑️</button>
+      </td>
+    </tr>`;
+  };
 
-  html += '</tbody></table>';
-  document.getElementById('productTable').innerHTML = html;
+  const FLAT_HDR = `<table class="pm-table"><thead><tr>
+    <th style="width:32px;">#</th><th>ชื่อสินค้า</th>
+    <th style="width:78px;text-align:right;">ราคา/หน่วย</th>
+    <th style="width:60px;">หน่วย</th>
+    <th style="width:72px;text-align:center;">จัดการ</th>
+  </tr></thead><tbody>`;
+
+  if(!q && !catFilter){
+    // ── จัดกลุ่มตามหมวดหมู่ ──
+    const CAT_ORDER = ['feed','postlarva','chemical','electricity','laborPercent','laborSalary','fuel','pipePa','pipeClose','other'];
+    const groups = {};
+    filtered.forEach(p => {
+      const cat = p.category || 'other';
+      if(!groups[cat]) groups[cat] = [];
+      groups[cat].push(p);
+    });
+    const allCats = [...new Set([...CAT_ORDER, ...Object.keys(groups)])].filter(c => groups[c]);
+
+    let html = '';
+    allCats.forEach(cat => {
+      const color = COST_CAT_COLORS[cat] || '#94a3b8';
+      const label = COST_CAT_LABELS[cat]  || cat;
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:${color}18;border-left:3px solid ${color};margin:6px 0 2px;border-radius:0 8px 8px 0;">
+        <span style="font-size:12px;font-weight:700;color:${color};">${label}</span>
+        <span style="font-size:11px;color:${color};opacity:.7;">${groups[cat].length} รายการ</span>
+      </div>`;
+      html += FLAT_HDR;
+      groups[cat].forEach((p, i) => {
+        html += ROW_COLS(p, catalog.indexOf(p), i+1);
+      });
+      html += '</tbody></table>';
+    });
+    document.getElementById('productTable').innerHTML = html;
+  } else {
+    // ── แสดงแบบ flat พร้อม badge หมวด ──
+    let html = `<table class="pm-table"><thead><tr>
+      <th style="width:32px;">#</th><th>ชื่อสินค้า</th>
+      <th style="width:76px;">หมวด</th>
+      <th style="width:78px;text-align:right;">ราคา/หน่วย</th>
+      <th style="width:60px;">หน่วย</th>
+      <th style="width:72px;text-align:center;">จัดการ</th>
+    </tr></thead><tbody>`;
+    filtered.forEach((p, i) => {
+      const realIdx = catalog.indexOf(p);
+      const isEditing = realIdx === _editProductIdx;
+      const cat = p.category || 'other';
+      const color = COST_CAT_COLORS[cat] || '#94a3b8';
+      html += `<tr style="${isEditing ? 'background:#eff6ff;' : ''}">
+        <td style="color:var(--text-secondary);font-size:11px;text-align:center;">${i+1}</td>
+        <td style="font-weight:${isEditing ? '700' : '500'};">${p.name}</td>
+        <td><span style="background:${color}20;color:${color};border-radius:6px;padding:2px 6px;font-size:11px;font-weight:600;white-space:nowrap;">${COST_CAT_LABELS[cat]||cat}</span></td>
+        <td style="text-align:right;">${p.priceUnit != null ? Number(p.priceUnit).toLocaleString('th-TH') : '-'}</td>
+        <td style="color:var(--text-secondary);">${p.unit || '-'}</td>
+        <td style="text-align:center;white-space:nowrap;">
+          <button class="btn-icon-sm" onclick="editProduct(${realIdx})" title="แก้ไข" style="color:#2563eb;">✏️</button>
+          <button class="btn-icon-sm danger" onclick="deleteProduct(${realIdx})" title="ลบ">🗑️</button>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('productTable').innerHTML = html;
+  }
 }
 
 function addProductToDb(){
