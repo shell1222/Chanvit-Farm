@@ -476,6 +476,9 @@
   .pm-table tr:hover td{background:#fafafa;}
   .pm-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:var(--primary-light);color:var(--primary-dark);}
   .pm-badge.builtin{background:#e8f5e9;color:#2e7d32;}
+  .pm-cat-btn{padding:4px 10px;border-radius:20px;border:1.5px solid var(--cc,#64748b);background:transparent;color:var(--cc,#64748b);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;}
+  .pm-cat-btn:hover{background:color-mix(in srgb,var(--cc,#64748b) 12%,transparent);}
+  .pm-cat-btn.active{background:var(--cc,#64748b);color:#fff;}
   /* autocomplete */
   .autocomplete-wrap{position:relative;}
   .autocomplete-list{
@@ -1201,9 +1204,21 @@
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <div class="section-title" style="margin:0;">รายการทั้งหมด (<span id="pmCount">0</span> รายการ)</div>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <input type="text" id="pmSearch" placeholder="ค้นหาชื่อสินค้า..." style="flex:1;min-width:120px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;" oninput="renderProductTable()">
-            <select id="pmCatFilter" style="padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);" onchange="renderProductTable()">
+          <input type="text" id="pmSearch" placeholder="ค้นหาชื่อสินค้า..." style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:8px;" oninput="renderProductTable()">
+          <div id="pmCatBtns" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+            <button onclick="setPmCatFilter('')"  id="pmBtn_all"         class="pm-cat-btn active" style="--cc:#64748b;">ทุกหมวด</button>
+            <button onclick="setPmCatFilter('feed')"         id="pmBtn_feed"        class="pm-cat-btn" style="--cc:#22c55e;">อาหาร</button>
+            <button onclick="setPmCatFilter('postlarva')"    id="pmBtn_postlarva"   class="pm-cat-btn" style="--cc:#f97316;">ลูกกุ้ง</button>
+            <button onclick="setPmCatFilter('chemical')"     id="pmBtn_chemical"    class="pm-cat-btn" style="--cc:#3b82f6;">เคมีภัณฑ์</button>
+            <button onclick="setPmCatFilter('fuel')"         id="pmBtn_fuel"        class="pm-cat-btn" style="--cc:#06b6d4;">น้ำมัน</button>
+            <button onclick="setPmCatFilter('electricity')"  id="pmBtn_electricity" class="pm-cat-btn" style="--cc:#eab308;">ค่าไฟ</button>
+            <button onclick="setPmCatFilter('laborPercent')" id="pmBtn_laborPercent" class="pm-cat-btn" style="--cc:#a855f7;">%ลูกน้อง</button>
+            <button onclick="setPmCatFilter('laborSalary')"  id="pmBtn_laborSalary"  class="pm-cat-btn" style="--cc:#c084fc;">เงินเดือน</button>
+            <button onclick="setPmCatFilter('other')"        id="pmBtn_other"       class="pm-cat-btn" style="--cc:#94a3b8;">อื่นๆ</button>
+          </div>
+          <div style="display:none;">
+            <!-- compat: keep pmCatFilter value available for JS -->
+            <select id="pmCatFilter" onchange="renderProductTable()">
               <option value="">ทุกหมวด</option>
               <option value="feed">อาหาร</option>
               <option value="postlarva">ลูกกุ้ง</option>
@@ -4928,6 +4943,16 @@ function removeCostDetailItem(idx){
    PRODUCT CATALOG MODAL
    ============================================================ */
 let _editProductIdx = -1;
+
+function setPmCatFilter(cat){
+  const sel = document.getElementById('pmCatFilter');
+  if(sel){ for(let i=0;i<sel.options.length;i++) if(sel.options[i].value===cat){ sel.selectedIndex=i; break; } }
+  document.querySelectorAll('.pm-cat-btn').forEach(b => b.classList.remove('active'));
+  const key = cat || 'all';
+  const btn = document.getElementById('pmBtn_' + key);
+  if(btn) btn.classList.add('active');
+  renderProductTable();
+}
 
 function openProductModal(){
   _editProductIdx = -1;
