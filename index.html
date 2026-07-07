@@ -982,6 +982,20 @@
           <div class="stat"><div class="label">ต้นทุนรวม (บาท)</div><div class="value" id="pondCostTotal">0</div></div>
         </div>
       </div>
+
+      <!-- แผนภูมิสัดส่วนต้นทุน -->
+      <div class="card" id="costPieWrap" style="display:none;">
+        <h2><i class="ti ti-chart-pie"></i> สัดส่วนต้นทุน ต่อการผลิตกุ้ง 1 กก. — บ่อ <span class="costPondTitleRef"></span></h2>
+        <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:center;">
+          <div style="flex:1;min-width:180px;overflow-x:auto;">
+            <table id="costPieTable" style="width:100%;border-collapse:collapse;"></table>
+          </div>
+          <div style="flex:0 0 220px;max-width:260px;margin:0 auto;">
+            <canvas id="costPieCanvas" style="max-height:240px;"></canvas>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:8px;text-align:center;font-size:11px;">ที่มา: รายละเอียดสินค้า (หากไม่มีใช้ค่าจากตารางต้นทุน)</p>
+      </div>
     </div>
   </div>
 
@@ -2835,6 +2849,98 @@ function renderPondCostList(){
   document.getElementById('pondCostTotal').textContent = total.toLocaleString();
 }
 
+let _costPieChart = null;
+function renderCostPieChart(){
+  const wrap = document.getElementById('costPieWrap');
+  if(!wrap || !costSelectedPond){ if(wrap) wrap.style.display='none'; return; }
+
+  // Primary source: pondCostDetails (product records with category)
+  const items = (STATE.pondCostDetails && STATE.pondCostDetails[costSelectedPond]) || [];
+  const ps = STATE.pondStatus && STATE.pondStatus[costSelectedPond];
+  const yieldKg = ps && ps.yield ? parseFloat(ps.yield) : null;
+
+  const catTotals = {};
+  items.forEach(it => {
+    const cat = it.category || 'other';
+    catTotals[cat] = (catTotals[cat] || 0) + (it.total || 0);
+  });
+
+  // Fallback: use pondCosts2 fixed cost table if no product records
+  if(Object.keys(catTotals).length === 0){
+    const fixed = (STATE.pondCosts2 && STATE.pondCosts2[costSelectedPond]) || {};
+    COST_ITEMS.forEach(item => {
+      const val = parseFloat(fixed[item.id]) || 0;
+      if(val > 0) catTotals[item.id] = (catTotals[item.id] || 0) + val;
+    });
+    (fixed._custom || []).forEach(c => {
+      if(c.amount > 0) catTotals['other'] = (catTotals['other'] || 0) + c.amount;
+    });
+  }
+
+  const grandTotal = Object.values(catTotals).reduce((s,v)=>s+v, 0);
+  if(grandTotal === 0){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+
+  const sorted = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+  const labels = sorted.map(([cat]) => COST_CAT_LABELS[cat] || cat);
+  const data = sorted.map(([,v]) => v);
+  const bgColors = sorted.map(([cat]) => COST_CAT_COLORS[cat] || '#94a3b8');
+
+  // Table
+  const tableEl = document.getElementById('costPieTable');
+  let th = `<thead><tr>
+    <th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--border);font-size:12px;color:var(--text-secondary);">กลุ่มสินค้า</th>
+    <th style="padding:6px 8px;text-align:right;border-bottom:2px solid var(--border);font-size:12px;color:var(--text-secondary);">บาท/กก.</th>
+    <th style="padding:6px 8px;text-align:right;border-bottom:2px solid var(--border);font-size:12px;color:var(--text-secondary);">%</th>
+  </tr></thead><tbody>`;
+  sorted.forEach(([cat, total], i) => {
+    const pct = ((total/grandTotal)*100).toFixed(0);
+    const kg = yieldKg ? (total/yieldKg).toFixed(2) : '-';
+    th += `<tr>
+      <td style="padding:6px 8px;font-size:13px;">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${bgColors[i]};margin-right:6px;vertical-align:middle;"></span>
+        ${COST_CAT_LABELS[cat] || cat}
+      </td>
+      <td style="padding:6px 8px;text-align:right;font-size:13px;">${kg}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:13px;font-weight:700;color:${bgColors[i]};">${pct}%</td>
+    </tr>`;
+  });
+  const totalKg = yieldKg ? (grandTotal/yieldKg).toFixed(2) : '-';
+  th += `</tbody><tfoot><tr style="border-top:2px solid var(--border);">
+    <td style="padding:6px 8px;font-weight:700;font-size:13px;">รวม</td>
+    <td style="padding:6px 8px;text-align:right;font-weight:700;font-size:13px;">${totalKg}</td>
+    <td style="padding:6px 8px;text-align:right;font-weight:700;font-size:13px;">100%</td>
+  </tr></tfoot>`;
+  tableEl.innerHTML = th;
+
+  // Pie chart
+  if(_costPieChart) _costPieChart.destroy();
+  const ctx = document.getElementById('costPieCanvas').getContext('2d');
+  _costPieChart = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(c){
+              const tot = c.dataset.data.reduce((a,b)=>a+b,0);
+              const pct = ((c.raw/tot)*100).toFixed(0);
+              const kg = yieldKg ? ' | '+(c.raw/yieldKg).toFixed(2)+' บ./กก.' : '';
+              return ` ${c.label}: ${pct}%${kg}`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
 function addPondCost(){
   if(!costSelectedPond){ showToast('กรุณาเลือกบ่อก่อน'); return; }
   const date = document.getElementById('costDate').value;
@@ -4274,6 +4380,12 @@ const COST_CAT_LABELS = {
   laborSalary:'เงินเดือนลูกน้อง', fuel:'ค่าน้ำมัน',
   pipePa:'ค่าท่อ', pipeClose:'ค่าท่อปิดบ่อ', partial:'ค่าพาเชี่ยล', mudPump:'ค่าฉีดเลน', other:'อื่นๆ'
 };
+const COST_CAT_COLORS = {
+  feed:'#22c55e', postlarva:'#f97316', chemical:'#3b82f6',
+  electricity:'#eab308', laborPercent:'#a855f7', laborSalary:'#c084fc',
+  fuel:'#06b6d4', pipePa:'#14b8a6', pipeClose:'#0891b2',
+  partial:'#f43f5e', mudPump:'#fb923c', other:'#94a3b8'
+};
 
 let costSelectedPond = null;
 
@@ -4353,6 +4465,7 @@ function renderCostDetail(){
   calcCostTotal();
   renderCostDetailItems();
   renderPondCostList();
+  renderCostPieChart();
   document.querySelectorAll('.costPondTitleRef').forEach(el=>el.textContent=costSelectedPond);
   if(!document.getElementById('costDate').value) document.getElementById('costDate').value = todayStr();
 }
@@ -4426,6 +4539,7 @@ function saveCostForm(){
   saveState();
   renderCostTab();
   renderCostDetailItems();
+  renderCostPieChart();
   showToast('บันทึกต้นทุนบ่อ '+costSelectedPond+' แล้ว');
 }
 
@@ -4497,6 +4611,7 @@ function renderCostDetailItems(){
   const grandTotal = items.reduce((s, it) => s + (it.total || 0), 0);
   const totalEl = document.getElementById('pondCostTotal');
   if(totalEl) totalEl.textContent = grandTotal.toLocaleString('th-TH');
+  renderCostPieChart();
 }
 
 function startEditCostDetail(idx){
