@@ -2874,8 +2874,9 @@ function renderPondCostList(){
 let _costModalPieChart = null;
 let _costModalPondId   = null;
 const COST_DRILL_PALETTE = ['#3b82f6','#22c55e','#f97316','#a855f7','#06b6d4','#eab308','#f43f5e','#14b8a6','#8b5cf6','#fb923c','#ec4899','#84cc16'];
+const PROD_CATS = ['water_cond','chemical_dis','microbe','supplement','equipment','other'];
 
-function renderCostModalPieChart(pondId, drillCat){
+function renderCostModalPieChart(pondId, drillCat, drillSubCat){
   if(pondId) _costModalPondId = pondId;
   const pid  = _costModalPondId;
   const wrap = document.getElementById('costModalPieWrap');
@@ -2889,10 +2890,11 @@ function renderCostModalPieChart(pondId, drillCat){
   const _catchKg = s ? (parseFloat(s.partial1)||0)+(parseFloat(s.partial2)||0)+(parseFloat(s.closed)||0) : 0;
   const totalKg  = parseFloat(s&&s.total) || _hvKg || _catchKg || 0;
 
-  let items, title, isDrill = !!drillCat;
+  const level = !drillCat ? 1 : !drillSubCat ? 2 : 3;
+  let items, title;
 
-  if(!drillCat){
-    // ── ระดับแรก: ต้นทุนรวมตามหมวด ──
+  if(level === 1){
+    // ── ชั้น 1: ต้นทุนรวมตามหมวดใหญ่ (pondCosts2) ──
     const catTotals = {};
     COST_ITEMS.forEach(it => {
       const val = parseFloat(costs2[it.id]) || 0;
@@ -2903,40 +2905,57 @@ function renderCostModalPieChart(pondId, drillCat){
     });
     const grand = Object.values(catTotals).reduce((s,v)=>s+v, 0);
     if(grand === 0){ wrap.innerHTML=''; return; }
-    items = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).map(([cat,val]) => ({
-      key: cat,
-      label: COST_CAT_LABELS[cat] || cat,
-      val,
-      color: COST_CAT_COLORS[cat] || '#94a3b8',
-      canDrill: details.some(d => d.category === cat)
-    }));
+    items = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).map(([cat,val]) => {
+      const hasProdCatDetails = PROD_CATS.some(pc => details.some(d => d.category === pc));
+      const hasDirectDetails  = details.some(d => d.category === cat);
+      const canDrill = cat === 'chemical' ? (hasProdCatDetails || hasDirectDetails) : hasDirectDetails;
+      return { key: cat, label: COST_CAT_LABELS[cat]||cat, val, color: COST_CAT_COLORS[cat]||'#94a3b8', canDrill };
+    });
     title = 'สัดส่วนต้นทุน ต่อการผลิตกุ้ง 1 กก.';
+
+  } else if(level === 2){
+    // ── ชั้น 2: หมวดย่อยสินค้า (product categories) ──
+    const isChemical = drillCat === 'chemical';
+    const relevant   = details.filter(d =>
+      isChemical
+        ? (PROD_CATS.includes(d.category) || d.category === 'chemical')
+        : d.category === drillCat
+    );
+    if(relevant.length === 0){ showToast('ไม่มีรายละเอียดในหมวดนี้'); return; }
+    const subMap = {};
+    relevant.forEach(d => { const c = d.category||'other'; subMap[c] = (subMap[c]||0)+(d.total||0); });
+    items = Object.entries(subMap).sort((a,b)=>b[1]-a[1]).map(([cat,val],i) => ({
+      key: cat, label: COST_CAT_LABELS[cat]||cat, val,
+      color: COST_CAT_COLORS[cat] || COST_DRILL_PALETTE[i % COST_DRILL_PALETTE.length],
+      canDrill: true
+    }));
+    title = (COST_CAT_LABELS[drillCat]||drillCat) + ' — รายหมวดย่อย';
+
   } else {
-    // ── ระดับสอง: รายละเอียดสินค้าในหมวด ──
-    const catItems = details.filter(d => d.category === drillCat);
+    // ── ชั้น 3: รายสินค้าในหมวดย่อย ──
+    const catItems = details.filter(d => d.category === drillSubCat);
     if(catItems.length === 0){ showToast('ไม่มีรายละเอียดสินค้าในหมวดนี้'); return; }
     const prodMap = {};
-    catItems.forEach(it => {
-      const k = it.name || 'ไม่ระบุ';
-      prodMap[k] = (prodMap[k]||0) + (it.total||0);
-    });
+    catItems.forEach(it => { const k = it.name||'ไม่ระบุ'; prodMap[k] = (prodMap[k]||0)+(it.total||0); });
     items = Object.entries(prodMap).sort((a,b)=>b[1]-a[1]).map(([name,val],i) => ({
       key: name, label: name, val,
       color: COST_DRILL_PALETTE[i % COST_DRILL_PALETTE.length],
       canDrill: false
     }));
-    title = (COST_CAT_LABELS[drillCat]||drillCat) + ' — รายสินค้า';
+    title = (COST_CAT_LABELS[drillSubCat]||drillSubCat) + ' — รายสินค้า';
   }
 
   const grand = items.reduce((s,{val})=>s+val, 0);
 
-  // ── สร้าง table rows ──
+  // ── Table rows ──
   let tableRows = '';
   items.forEach(({key,label,val,color,canDrill}) => {
-    const pct = ((val/grand)*100).toFixed(0);
-    const kg  = totalKg > 0 ? (val/totalKg).toFixed(2) : '-';
-    const drill = canDrill ? `onclick="renderCostModalPieChart(null,'${key}')" style="cursor:pointer;"` : '';
-    tableRows += `<tr ${drill}>
+    const pct  = ((val/grand)*100).toFixed(0);
+    const kg   = totalKg > 0 ? (val/totalKg).toFixed(2) : '-';
+    let drillAttr = '';
+    if(level === 1 && canDrill) drillAttr = `onclick="renderCostModalPieChart(null,'${key}')" style="cursor:pointer;"`;
+    if(level === 2 && canDrill) drillAttr = `onclick="renderCostModalPieChart(null,'${drillCat}','${key}')" style="cursor:pointer;"`;
+    tableRows += `<tr ${drillAttr}>
       <td style="padding:5px 8px;font-size:12px;">
         <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color};margin-right:6px;vertical-align:middle;"></span>
         ${label}
@@ -2952,18 +2971,19 @@ function renderCostModalPieChart(pondId, drillCat){
     <td style="padding:5px 8px;text-align:right;font-weight:700;font-size:12px;">100%</td>
   </tr>`;
 
-  // ── Render HTML: chart บน, legend ล่าง ──
-  const backBtn = isDrill
-    ? `<button onclick="renderCostModalPieChart(null,null)" style="background:none;border:1.5px solid var(--border);border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer;color:var(--primary);margin-bottom:8px;">← กลับ</button>` : '';
-  const hint = !isDrill && items.some(it=>it.canDrill)
+  // ── Back button ──
+  const BACK_STYLE = `background:none;border:1.5px solid var(--border);border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer;color:var(--primary);margin-bottom:8px;`;
+  let backBtn = '';
+  if(level === 2) backBtn = `<button onclick="renderCostModalPieChart(null,null,null)" style="${BACK_STYLE}">← กลับ</button>`;
+  if(level === 3) backBtn = `<button onclick="renderCostModalPieChart(null,'${drillCat}',null)" style="${BACK_STYLE}">← ${COST_CAT_LABELS[drillCat]||drillCat}</button>`;
+
+  const hint = level === 1 && items.some(it=>it.canDrill)
     ? `<p style="text-align:center;font-size:11px;color:var(--text-secondary);margin:4px 0 0;">กดที่ชิ้นส่วนหรือแถว ▶ เพื่อดูรายละเอียด</p>` : '';
 
   wrap.innerHTML = `<div style="margin-top:14px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;">
     ${backBtn}
     <div style="font-size:12px;font-weight:700;color:#854f0b;margin-bottom:10px;text-align:center;">📊 ${title}</div>
-    <div style="max-width:300px;margin:0 auto;">
-      <canvas id="costModalPieCanvas"></canvas>
-    </div>
+    <div style="max-width:300px;margin:0 auto;"><canvas id="costModalPieCanvas"></canvas></div>
     ${hint}
     <table style="width:100%;border-collapse:collapse;margin-top:12px;">
       <thead><tr>
@@ -2976,7 +2996,6 @@ function renderCostModalPieChart(pondId, drillCat){
     </table>
   </div>`;
 
-  // ── Chart.js ──
   if(_costModalPieChart) _costModalPieChart.destroy();
   _costModalPieChart = new Chart(
     document.getElementById('costModalPieCanvas').getContext('2d'), {
@@ -2990,8 +3009,9 @@ function renderCostModalPieChart(pondId, drillCat){
         onClick(evt, els){
           if(!els || els.length === 0) return;
           const it = items[els[0].index];
-          if(it.canDrill) renderCostModalPieChart(null, it.key);
-          else if(isDrill) showToast(it.label + ': ' + it.val.toLocaleString('th-TH') + ' บาท');
+          if(level === 1 && it.canDrill) renderCostModalPieChart(null, it.key);
+          else if(level === 2 && it.canDrill) renderCostModalPieChart(null, drillCat, it.key);
+          else showToast(it.label + ': ' + it.val.toLocaleString('th-TH') + ' บาท');
         },
         plugins: {
           legend: { display: false },
