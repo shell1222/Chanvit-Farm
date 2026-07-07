@@ -2849,6 +2849,85 @@ function renderPondCostList(){
   document.getElementById('pondCostTotal').textContent = total.toLocaleString();
 }
 
+let _costModalPieChart = null;
+function renderCostModalPieChart(pondId){
+  const tableEl = document.getElementById('costModalPieTable');
+  const canvas  = document.getElementById('costModalPieCanvas');
+  if(!tableEl || !canvas) return;
+
+  const costs2  = (STATE.pondCosts2 && STATE.pondCosts2[pondId]) || {};
+  const s       = STATE.pondStatus && STATE.pondStatus[pondId];
+  const _hvRev  = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+  const _hvKg   = _hvRev.reduce((sum,h)=>sum+(parseFloat(h.kg)||0),0);
+  const _catchKg= s ? (parseFloat(s.partial1)||0)+(parseFloat(s.partial2)||0)+(parseFloat(s.closed)||0) : 0;
+  const totalKg = parseFloat(s&&s.total) || _hvKg || _catchKg || 0;
+
+  const catTotals = {};
+  COST_ITEMS.forEach(it => {
+    const val = parseFloat(costs2[it.id]) || 0;
+    if(val > 0) catTotals[it.id] = val;
+  });
+  (costs2._custom || []).forEach(c => {
+    if(c.amount > 0) catTotals['other'] = (catTotals['other']||0) + c.amount;
+  });
+
+  const grandTotal = Object.values(catTotals).reduce((s,v)=>s+v, 0);
+  if(grandTotal === 0) return;
+
+  const sorted   = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+  const labels   = sorted.map(([cat]) => COST_CAT_LABELS[cat]||cat);
+  const data     = sorted.map(([,v]) => v);
+  const bgColors = sorted.map(([cat]) => COST_CAT_COLORS[cat]||'#94a3b8');
+
+  // Table
+  let th = `<thead><tr>
+    <th style="padding:4px 6px;text-align:left;border-bottom:1px solid #e5e7eb;font-size:11px;color:#6b7280;">กลุ่มสินค้า</th>
+    <th style="padding:4px 6px;text-align:right;border-bottom:1px solid #e5e7eb;font-size:11px;color:#6b7280;">บาท/กก.</th>
+    <th style="padding:4px 6px;text-align:right;border-bottom:1px solid #e5e7eb;font-size:11px;color:#6b7280;">%</th>
+  </tr></thead><tbody>`;
+  sorted.forEach(([cat, total], i) => {
+    const pct = ((total/grandTotal)*100).toFixed(0);
+    const kg  = totalKg > 0 ? (total/totalKg).toFixed(2) : '-';
+    th += `<tr>
+      <td style="padding:4px 6px;font-size:12px;">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${bgColors[i]};margin-right:5px;vertical-align:middle;"></span>
+        ${COST_CAT_LABELS[cat]||cat}
+      </td>
+      <td style="padding:4px 6px;text-align:right;font-size:12px;">${kg}</td>
+      <td style="padding:4px 6px;text-align:right;font-size:12px;font-weight:700;color:${bgColors[i]};">${pct}%</td>
+    </tr>`;
+  });
+  th += `</tbody><tfoot><tr style="border-top:1px solid #e5e7eb;">
+    <td style="padding:4px 6px;font-weight:700;font-size:12px;">รวม</td>
+    <td style="padding:4px 6px;text-align:right;font-weight:700;font-size:12px;">${totalKg>0?(grandTotal/totalKg).toFixed(2):'-'}</td>
+    <td style="padding:4px 6px;text-align:right;font-weight:700;font-size:12px;">100%</td>
+  </tr></tfoot>`;
+  tableEl.innerHTML = th;
+
+  // Chart
+  if(_costModalPieChart) _costModalPieChart.destroy();
+  _costModalPieChart = new Chart(canvas.getContext('2d'), {
+    type: 'pie',
+    data: { labels, datasets: [{ data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }] },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(c){
+              const tot = c.dataset.data.reduce((a,b)=>a+b,0);
+              const pct = ((c.raw/tot)*100).toFixed(0);
+              const kg  = totalKg>0 ? ' | '+(c.raw/totalKg).toFixed(2)+' บ./กก.' : '';
+              return ` ${c.label}: ${pct}%${kg}`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
 let _costPieChart = null;
 function renderCostPieChart(){
   const wrap = document.getElementById('costPieWrap');
@@ -3639,6 +3718,19 @@ function openPondSummaryModal(pondId){
           <span style="font-size:24px;font-weight:900;color:${isProfit ? '#065f46' : '#991b1b'};">${Math.abs(profit).toLocaleString('th-TH')} <span style="font-size:14px;font-weight:500;">บาท</span></span>
         </div>`;
       }
+
+      // แผนภูมิสัดส่วนต้นทุน
+      html += `<div style="margin-top:14px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;">
+        <div style="font-size:12px;font-weight:700;color:#854f0b;margin-bottom:10px;">📊 สัดส่วนต้นทุน ต่อการผลิตกุ้ง 1 กก.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+          <div style="flex:1;min-width:150px;overflow-x:auto;">
+            <table id="costModalPieTable" style="width:100%;border-collapse:collapse;"></table>
+          </div>
+          <div style="flex:0 0 160px;max-width:180px;margin:0 auto;">
+            <canvas id="costModalPieCanvas" style="max-height:180px;"></canvas>
+          </div>
+        </div>
+      </div>`;
     }
 
     if(s.note){
@@ -3651,6 +3743,7 @@ function openPondSummaryModal(pondId){
 
   document.getElementById('pondSummaryContent').innerHTML = html;
   document.getElementById('pondSummaryModal').style.display = 'flex';
+  renderCostModalPieChart(pondId);
 }
 
 function openPondSummaryEditMode(pondId){
