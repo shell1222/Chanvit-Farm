@@ -760,12 +760,20 @@
           <div class="field"><label>Size Partial 1 (ตัว/กก.)</label><input type="number" step="0.01" id="activePartial1Size"></div>
         </div>
         <div class="row2">
+          <div class="field"><label>ราคา Partial 1 (บาท/กก.)</label><input type="number" step="0.01" id="activePartial1Price" placeholder="เช่น 65"></div>
+          <div class="field"></div>
+        </div>
+        <div class="row2">
           <div class="field"><label>วันที่ Partial 2</label><input type="date" id="activePartial2Date" oninput="calcPartialDoc('active',2)"></div>
           <div class="field"><label>อายุกุ้ง Partial 2 (วัน)</label><input type="number" id="activePartial2Doc" style="color:var(--primary);font-weight:700;"></div>
         </div>
         <div class="row2">
           <div class="field"><label>Partial 2 (กก.)</label><input type="number" step="0.01" id="activePartial2"></div>
           <div class="field"><label>Size Partial 2 (ตัว/กก.)</label><input type="number" step="0.01" id="activePartial2Size"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>ราคา Partial 2 (บาท/กก.)</label><input type="number" step="0.01" id="activePartial2Price" placeholder="เช่น 70"></div>
+          <div class="field"></div>
         </div>
       </div>
 
@@ -793,12 +801,20 @@
           <div class="field"><label>Size Partial 1 (ตัว/กก.)</label><input type="number" step="0.01" id="closePartial1Size"></div>
         </div>
         <div class="row2">
+          <div class="field"><label>ราคา Partial 1 (บาท/กก.)</label><input type="number" step="0.01" id="closePartial1Price" placeholder="เช่น 65"></div>
+          <div class="field"></div>
+        </div>
+        <div class="row2">
           <div class="field"><label>วันที่ Partial 2</label><input type="date" id="closePartial2Date" oninput="calcPartialDoc('close',2)"></div>
           <div class="field"><label>อายุกุ้ง Partial 2 (วัน)</label><input type="number" id="closePartial2Doc" style="color:var(--primary);font-weight:700;"></div>
         </div>
         <div class="row2">
           <div class="field"><label>Partial 2 (กก.)</label><input type="number" step="0.01" id="closePartial2"></div>
           <div class="field"><label>Size Partial 2 (ตัว/กก.)</label><input type="number" step="0.01" id="closePartial2Size"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>ราคา Partial 2 (บาท/กก.)</label><input type="number" step="0.01" id="closePartial2Price" placeholder="เช่น 70"></div>
+          <div class="field"></div>
         </div>
         <div class="row2">
           <div class="field"><label>Closed (กก.)</label><input type="number" step="0.01" id="closeClosed"></div>
@@ -2659,9 +2675,11 @@ function openPondDetail(pondId){
     document.getElementById('activePartial1Date').value = status.partial1Date || '';
     document.getElementById('activePartial1').value = status.partial1 ?? '';
     document.getElementById('activePartial1Size').value = status.partial1Size ?? '';
+    document.getElementById('activePartial1Price').value = status.partial1Price ?? '';
     document.getElementById('activePartial2Date').value = status.partial2Date || '';
     document.getElementById('activePartial2').value = status.partial2 ?? '';
     document.getElementById('activePartial2Size').value = status.partial2Size ?? '';
+    document.getElementById('activePartial2Price').value = status.partial2Price ?? '';
     calcPartialDoc('active',1); calcPartialDoc('active',2);
   }
 
@@ -2674,9 +2692,11 @@ function openPondDetail(pondId){
     document.getElementById('closePartial1Date').value = status.partial1Date || '';
     document.getElementById('closePartial1').value = status.partial1 ?? '';
     document.getElementById('closePartial1Size').value = status.partial1Size ?? '';
+    document.getElementById('closePartial1Price').value = status.partial1Price ?? '';
     document.getElementById('closePartial2Date').value = status.partial2Date || '';
     document.getElementById('closePartial2').value = status.partial2 ?? '';
     document.getElementById('closePartial2Size').value = status.partial2Size ?? '';
+    document.getElementById('closePartial2Price').value = status.partial2Price ?? '';
     calcPartialDoc('close',1); calcPartialDoc('close',2);
     document.getElementById('closeClosed').value = status.closed ?? '';
     document.getElementById('closeClosedSize').value = status.closedSize ?? '';
@@ -2719,9 +2739,11 @@ function setPondStatus(status){
       ['activePartial1Date','closePartial1Date'],
       ['activePartial1','closePartial1'],
       ['activePartial1Size','closePartial1Size'],
+      ['activePartial1Price','closePartial1Price'],
       ['activePartial2Date','closePartial2Date'],
       ['activePartial2','closePartial2'],
       ['activePartial2Size','closePartial2Size'],
+      ['activePartial2Price','closePartial2Price'],
     ];
     syncFields.forEach(([src,dst])=>{
       const srcEl = document.getElementById(src);
@@ -2755,9 +2777,11 @@ function savePondStatus(){
     partial1Date: prev.partial1Date || null,
     partial1: prev.partial1 ?? null,
     partial1Size: prev.partial1Size ?? null,
+    partial1Price: prev.partial1Price ?? null,
     partial2Date: prev.partial2Date || null,
     partial2: prev.partial2 ?? null,
     partial2Size: prev.partial2Size ?? null,
+    partial2Price: prev.partial2Price ?? null,
   };
 
   if(status==='active'){
@@ -2773,9 +2797,11 @@ function savePondStatus(){
     record.partial1Date = document.getElementById('activePartial1Date').value || null;
     record.partial1 = parseFloatOrNull('activePartial1');
     record.partial1Size = parseFloatOrNull('activePartial1Size');
+    record.partial1Price = parseFloatOrNull('activePartial1Price');
     record.partial2Date = document.getElementById('activePartial2Date').value || null;
     record.partial2 = parseFloatOrNull('activePartial2');
     record.partial2Size = parseFloatOrNull('activePartial2Size');
+    record.partial2Price = parseFloatOrNull('activePartial2Price');
   }
   if(status==='closed'){
     record.closeDate = document.getElementById('closeDate').value || null;
@@ -2786,9 +2812,11 @@ function savePondStatus(){
     record.partial1Date = document.getElementById('closePartial1Date').value || null;
     record.partial1 = parseFloatOrNull('closePartial1');
     record.partial1Size = parseFloatOrNull('closePartial1Size');
+    record.partial1Price = parseFloatOrNull('closePartial1Price');
     record.partial2Date = document.getElementById('closePartial2Date').value || null;
     record.partial2 = parseFloatOrNull('closePartial2');
     record.partial2Size = parseFloatOrNull('closePartial2Size');
+    record.partial2Price = parseFloatOrNull('closePartial2Price');
     record.closed = parseFloatOrNull('closeClosed');
     record.closedSize = parseFloatOrNull('closeClosedSize');
     record.total = parseFloatOrNull('closeTotal');
@@ -2807,7 +2835,7 @@ function savePondStatus(){
 
     // รีเซตฟอร์มหลังบันทึก
     ['closeDate','closeArea','closeDensity','closeType','closeMBW',
-     'closePartial1Date','closePartial1','closePartial1Size','closePartial2Date','closePartial2','closePartial2Size',
+     'closePartial1Date','closePartial1','closePartial1Size','closePartial1Price','closePartial2Date','closePartial2','closePartial2Size','closePartial2Price',
      'closeClosed','closeClosedSize','closeTotal','closeAccF','closeYield',
      'closeDOC','closeMBWFinal','closeAvgSize','closeFCR','closeADG',
      'closeSROrder','closeSRBonus','closeCustomer','closeRevenue','closeNote'
