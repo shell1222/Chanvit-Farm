@@ -1507,7 +1507,8 @@ async function saveState(){
     autoBackup(payload);
   }catch(e){
     console.error('saveState error', e);
-    showToast('⚠️ บันทึกข้อมูลล้มเหลว! กรุณาตรวจสอบการเชื่อมต่อ');
+    const errCode = e && e.code ? e.code : (e && e.message ? e.message.slice(0,60) : 'unknown');
+    showToast('⚠️ บันทึกล้มเหลว: ' + errCode);
   }
 }
 
