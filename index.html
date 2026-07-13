@@ -1501,9 +1501,14 @@ async function saveState(){
       const extraGrowth = (cd.growthRecords||[]).filter(r=>r.date && r.pondId && !stGrowth.has(`${r.date}|${r.pondId}`));
       if(extraGrowth.length) payload.growthRecords = [...payload.growthRecords, ...extraGrowth];
     }
-    localStorage.setItem('farm-data', JSON.stringify(payload));
+    const payloadJson = JSON.stringify(payload);
+    const payloadKB = (new TextEncoder().encode(payloadJson).length / 1024).toFixed(1);
+    console.log(`saveState: payload = ${payloadKB} KB (feeds:${(payload.feedRecords||[]).length}, water:${(payload.waterRecords||[]).length})`);
+    if(payloadJson.length > 900000){
+      console.warn('payload approaching 1MB Firestore limit:', payloadKB, 'KB');
+    }
+    localStorage.setItem('farm-data', payloadJson);
     await db.collection('farms').doc('chanvit').set(payload);
-    // auto-backup: เก็บ snapshot 3 รอบล่าสุด
     autoBackup(payload);
   }catch(e){
     console.error('saveState error', e);
@@ -2442,16 +2447,16 @@ function renderGrowthRecentTable(){
     wrap.innerHTML = `<div class="empty-state"><i class="ti ti-scale"></i>ยังไม่มีข้อมูลการชั่งกุ้ง</div>`;
     return;
   }
-  let html = '<table><thead><tr><th>วันที่</th><th>บ่อ</th><th>อายุ</th><th>MBW</th><th>PDG</th><th>Size</th><th>ACC.Feed</th><th>โดย</th><th></th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>วันที่</th><th>บ่อ</th><th>อายุ</th><th>Size</th><th>MBW</th><th>PDG</th><th>ACC.Feed</th><th>โดย</th><th></th></tr></thead><tbody>';
   recent.forEach(r=>{
     const idx = STATE.growthRecords.indexOf(r);
     html += `<tr>
-      <td>${formatDate(r.date)}</td>
+      <td>${formatDateShort(r.date)}</td>
       <td>บ่อ ${r.pondId}</td>
       <td>${r.age}</td>
+      <td>${r.size}</td>
       <td>${r.mbw}</td>
       <td>${(r.pdg !== null ? r.pdg : calcPDG(r, STATE.growthRecords)) ?? '-'}</td>
-      <td>${r.size}</td>
       <td>${r.accFeed !== null ? r.accFeed.toLocaleString() : '-'}</td>
       <td><span class="badge green">${r.user||'-'}</span></td>
       <td style="white-space:nowrap;">
