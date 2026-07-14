@@ -1991,12 +1991,13 @@ function renderFeedTab(){
   const wrap = document.getElementById('feedPondList');
   wrap.innerHTML = '';
   const existing = STATE.feedRecords.find(r=>r.date===dateInput.value);
+  const prefill = existing || STATE.feedRecords.find(r=>r.date < dateInput.value);
 
   if(activePonds.length === 0){
     wrap.innerHTML = '<div class="empty-state"><i class="ti ti-fish"></i>ยังไม่มีบ่อที่ปล่อยกุ้ง — ตั้งค่าสถานะบ่อก่อน</div>';
   } else {
     activePonds.forEach(p=>{
-      const val = existing && existing.entries[p.id] !== undefined ? existing.entries[p.id] : '';
+      const val = prefill && prefill.entries[p.id] !== undefined ? prefill.entries[p.id] : '';
       const row = document.createElement('div');
       row.className = 'pond-row';
       row.innerHTML = `
