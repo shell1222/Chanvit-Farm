@@ -2989,7 +2989,8 @@ function renderCostModalPieChart(pondId, drillCat, drillSubCat){
     const kg   = totalKg > 0 ? (val/totalKg).toFixed(2) : '-';
     let drillAttr = '';
     if(level === 1 && canDrill) drillAttr = `onclick="renderCostModalPieChart(null,'${key}')" style="cursor:pointer;"`;
-    if(level === 2 && canDrill) drillAttr = `onclick="renderCostModalPieChart(null,'${drillCat}','${key}')" style="cursor:pointer;"`;
+    else if(level === 2 && canDrill) drillAttr = `onclick="renderCostModalPieChart(null,'${drillCat}','${key}')" style="cursor:pointer;"`;
+    else if(level !== 3) drillAttr = `onclick="showToast('${label}: ไม่มีรายการสินค้าย่อย — เพิ่มได้ที่ตารางรายละเอียดสินค้า')" style="cursor:pointer;"`;
     tableRows += `<tr ${drillAttr}>
       <td style="padding:5px 8px;font-size:12px;">
         <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color};margin-right:6px;vertical-align:middle;"></span>
