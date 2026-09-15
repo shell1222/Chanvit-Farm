@@ -548,6 +548,7 @@
   <div class="tab" data-tab="feedmix" onclick="switchTab('feedmix')"><i class="ti ti-flask"></i> สารผสมอาหาร</div>
   <div class="tab" data-tab="ponds" onclick="switchTab('ponds')"><i class="ti ti-list"></i> ข้อมูลบ่อ</div>
   <div class="tab" data-tab="cost" onclick="switchTab('cost')"><i class="ti ti-receipt"></i> บัญชีต้นทุน</div>
+  <div class="tab" data-tab="withdraw" onclick="switchTab('withdraw')">📦 เบิกของ</div>
   <div class="tab" data-tab="summary" onclick="switchTab('summary')">📊 สรุปปีนี้</div>
 </div>
 
@@ -1020,6 +1021,44 @@
         </div>
         <p class="hint" style="margin-top:8px;text-align:center;font-size:11px;">ที่มา: รายละเอียดสินค้า (หากไม่มีใช้ค่าจากตารางต้นทุน)</p>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: WITHDRAW (เบิกของ) ============ -->
+  <div class="tab-content" id="tab-withdraw" style="display:none;">
+    <div class="card">
+      <h2>📦 เบิกของ</h2>
+      <p class="hint" style="margin-bottom:10px;">บันทึกรายการเบิกของ — นับรวมเป็นต้นทุนของบ่อ (รอบการเลี้ยงปัจจุบัน) โดยอัตโนมัติ</p>
+      <div class="row2">
+        <div class="field">
+          <label>บ่อ</label>
+          <select id="wdPond"></select>
+        </div>
+        <div class="field">
+          <label>วันที่เบิก</label>
+          <input type="date" id="wdDate">
+        </div>
+      </div>
+      <div class="field">
+        <label>ชื่อรายการ</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="wdName" placeholder="พิมพ์เพื่อค้นหา เช่น อาหาร, PH Fixer..." autocomplete="off">
+          <div class="autocomplete-list" id="wdSuggestList" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>ราคา (บาท)</label>
+        <input type="number" step="0.01" id="wdPrice" placeholder="เช่น 1,075">
+      </div>
+      <button class="btn full" onclick="saveWithdraw()">
+        <i class="ti ti-device-floppy"></i> บันทึกรายการเบิกของ
+      </button>
+      <p class="hint" style="margin-top:8px;text-align:center;">บันทึกโดย: <span id="wdCurrentUser" style="font-weight:700;"></span></p>
+    </div>
+
+    <div class="card">
+      <h2><i class="ti ti-list"></i> รายการเบิกของล่าสุด</h2>
+      <div class="table-wrap" id="wdHistoryWrap"></div>
     </div>
   </div>
 
@@ -1501,6 +1540,7 @@ function reRenderActiveTab(){
   else if(tab==='status') renderPondStatusTab();
   else if(tab==='ponds') renderPondsTab();
   else if(tab==='cost') renderCostTab();
+  else if(tab==='withdraw') renderWithdrawTab();
   else if(tab==='summary') renderSummaryTab();
   else if(tab==='releaseplan') renderReleasePlanTab();
   else if(tab==='harvestplan') renderHarvestPlanTab();
@@ -1746,7 +1786,7 @@ function logActivity(type, detail){
 
 const TAB_LABELS = {
   feed: 'อาหารประจำวัน', water: 'PH/ความโปร่งใส', growth: 'สุ่มไซส์กุ้ง',
-  ponds: 'ข้อมูลบ่อ', status: 'สถานะบ่อ', cost: 'บัญชีต้นทุน',
+  ponds: 'ข้อมูลบ่อ', status: 'สถานะบ่อ', cost: 'บัญชีต้นทุน', withdraw: 'เบิกของ',
   history: 'ประวัติการจับ', summary: 'สรุปปีนี้',
   releaseplan: 'แผนการปล่อย', harvestplan: 'แผนการจับ',
   feedmix: 'สารผสมอาหาร'
@@ -1762,8 +1802,10 @@ function applyRoleUI(){
   // ซ่อนแท็บ cost/summary สำหรับ user
   const costTab = document.querySelector('[data-tab="cost"]');
   const summaryTab = document.querySelector('[data-tab="summary"]');
+  const withdrawTab = document.querySelector('[data-tab="withdraw"]');
   if(costTab) costTab.style.display = isUser ? 'none' : '';
   if(summaryTab) summaryTab.style.display = isUser ? 'none' : '';
+  if(withdrawTab) withdrawTab.style.display = isUser ? 'none' : '';
   // ปุ่มบันทึกสุ่มไซส์ — user ดูได้อย่างเดียว
   const saveBtn = document.getElementById('growthSaveBtn');
   if(saveBtn) saveBtn.style.display = isUser ? 'none' : '';
@@ -1874,7 +1916,7 @@ function logout(){
   renderUserList();
   document.getElementById('loginOverlay').style.display = 'flex';
   // reset UI — คืนค่า tab ทั้งหมดให้มองเห็น
-  ['cost','summary'].forEach(t=>{ const el=document.querySelector('[data-tab="'+t+'"]'); if(el) el.style.display=''; });
+  ['cost','summary','withdraw'].forEach(t=>{ const el=document.querySelector('[data-tab="'+t+'"]'); if(el) el.style.display=''; });
   const saveBtn=document.getElementById('growthSaveBtn'); if(saveBtn) saveBtn.style.display='';
 }
 
@@ -2042,7 +2084,7 @@ function handlePinComplete(){
    TABS
    ============================================================ */
 function switchTab(name){
-  if(currentRole()==='user' && (name==='cost'||name==='summary')){ showToast('ไม่มีสิทธิ์เข้าถึงส่วนนี้'); return; }
+  if(currentRole()==='user' && (name==='cost'||name==='summary'||name==='withdraw')){ showToast('ไม่มีสิทธิ์เข้าถึงส่วนนี้'); return; }
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
   document.querySelectorAll('.tab-content').forEach(c=>{
     c.style.display = (c.id === 'tab-'+name) ? 'block' : 'none';
@@ -2053,6 +2095,7 @@ function switchTab(name){
   if(name==='ponds') renderPondsTab();
   if(name==='status') renderPondStatusTab();
   if(name==='cost') renderCostTab();
+  if(name==='withdraw') renderWithdrawTab();
   if(name==='history') renderHistory();
   if(name==='summary') renderSummaryTab();
   if(name==='releaseplan') renderReleasePlanTab();
@@ -5115,6 +5158,138 @@ function removeCostDetailItem(idx){
   }
 
   // DOM may not be ready yet, wait for it
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', setup);
+  } else {
+    setup();
+  }
+})();
+
+/* ============================================================
+   WITHDRAW TAB (เบิกของ) — logs a purchase/withdrawal against a
+   pond's CURRENT cycle; counts toward that cycle's cost total via
+   pondCosts2[cycleId]._custom (same bucket saveCostForm() writes).
+   ============================================================ */
+function renderWithdrawTab(){
+  const pondSel = document.getElementById('wdPond');
+  if(!pondSel) return;
+  const prevVal = pondSel.value;
+  pondSel.innerHTML = STATE.ponds.map(p=>`<option value="${p.id}">บ่อ ${p.id}</option>`).join('');
+  if(prevVal && STATE.ponds.some(p=>p.id===prevVal)) pondSel.value = prevVal;
+
+  const dateEl = document.getElementById('wdDate');
+  if(dateEl && !dateEl.value) dateEl.value = todayStr();
+
+  const userEl = document.getElementById('wdCurrentUser');
+  if(userEl) userEl.textContent = STATE.currentUser || '-';
+
+  renderWithdrawHistory();
+}
+
+function saveWithdraw(){
+  const pondId = document.getElementById('wdPond').value;
+  const name = document.getElementById('wdName').value.trim();
+  const price = parseFloat(document.getElementById('wdPrice').value);
+  const date = document.getElementById('wdDate').value || todayStr();
+  if(!name){ showToast('กรุณาใส่ชื่อรายการ'); return; }
+  if(!price || price <= 0){ showToast('กรุณาใส่ราคา'); return; }
+  const cycle = getCurrentCycle(pondId);
+  if(!cycle){ showToast('บ่อนี้ยังไม่มีข้อมูลรอบการเลี้ยง เบิกของไม่ได้'); return; }
+
+  if(!STATE.pondCosts2) STATE.pondCosts2 = {};
+  if(!STATE.pondCosts2[cycle.cycleId]) STATE.pondCosts2[cycle.cycleId] = {};
+  const bucket = STATE.pondCosts2[cycle.cycleId];
+  if(!bucket._custom) bucket._custom = [];
+  bucket._custom.push({ name, amount: price, date, user: STATE.currentUser, ts: Date.now(), source: 'withdraw' });
+
+  logActivity('เบิกของ', `บ่อ ${pondId} — ${name} ${price.toLocaleString('th-TH')} บาท`);
+  saveState();
+
+  document.getElementById('wdName').value = '';
+  document.getElementById('wdPrice').value = '';
+  showToast('✅ บันทึกรายการเบิกของแล้ว');
+  renderWithdrawHistory();
+}
+
+function renderWithdrawHistory(){
+  const wrap = document.getElementById('wdHistoryWrap');
+  if(!wrap) return;
+  const rows = [];
+  STATE.ponds.forEach(p=>{
+    getPondCycles(p.id).forEach(cycle=>{
+      const items = (STATE.pondCosts2 && STATE.pondCosts2[cycle.cycleId] && STATE.pondCosts2[cycle.cycleId]._custom) || [];
+      items.forEach((item, idx)=>{
+        if(item.source === 'withdraw') rows.push({ pondId: p.id, cycleId: cycle.cycleId, idx, ...item });
+      });
+    });
+  });
+  if(rows.length === 0){
+    wrap.innerHTML = '<div class="empty-state"><i class="ti ti-package"></i>ยังไม่มีรายการเบิกของ</div>';
+    return;
+  }
+  rows.sort((a,b)=> (b.ts||0) - (a.ts||0));
+  let html = '<table><thead><tr><th>วันที่</th><th>บ่อ</th><th>รายการ</th><th>ราคา</th><th>โดย</th><th></th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    html += `<tr>
+      <td>${formatDateShort(r.date)}</td>
+      <td>บ่อ ${r.pondId}</td>
+      <td>${r.name}</td>
+      <td>${(parseFloat(r.amount)||0).toLocaleString('th-TH')}</td>
+      <td>${r.user||'-'}</td>
+      <td><button class="icon-btn" onclick="removeWithdrawItem('${r.cycleId}',${r.idx})">🗑️</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function removeWithdrawItem(cycleId, idx){
+  if(!confirm('ลบรายการเบิกของนี้หรือไม่?')) return;
+  const bucket = STATE.pondCosts2 && STATE.pondCosts2[cycleId];
+  if(!bucket || !bucket._custom || !bucket._custom[idx]) return;
+  bucket._custom.splice(idx, 1);
+  saveState();
+  renderWithdrawHistory();
+  showToast('ลบรายการแล้ว');
+}
+
+// Autocomplete for wdName — same source as the cost-detail product picker
+(function initWdAutocomplete(){
+  function setup(){
+    const inp = document.getElementById('wdName');
+    const list = document.getElementById('wdSuggestList');
+    if(!inp || !list) return;
+
+    inp.addEventListener('input', function(){
+      const q = inp.value.toLowerCase().trim();
+      list.innerHTML = '';
+      if(!q){ list.style.display = 'none'; return; }
+      const matches = (STATE.productCatalog || PRODUCT_CATALOG).filter(function(p){
+        return p.name.toLowerCase().indexOf(q) !== -1;
+      }).slice(0, 8);
+      if(matches.length === 0){ list.style.display = 'none'; return; }
+      matches.forEach(function(p){
+        const div = document.createElement('div');
+        div.className = 'autocomplete-item';
+        div.innerHTML = '<span class="ac-name">' + p.name + '</span>'
+          + (p.priceUnit ? '<span class="ac-price">' + p.priceUnit.toLocaleString('th-TH') + ' บ./' + p.unit + '</span>' : '');
+        div.addEventListener('mousedown', function(e){
+          e.preventDefault();
+          inp.value = p.name;
+          if(p.priceUnit){ document.getElementById('wdPrice').value = p.priceUnit; }
+          list.style.display = 'none';
+          document.getElementById('wdPrice').focus();
+        });
+        list.appendChild(div);
+      });
+      list.style.display = 'block';
+    });
+
+    inp.addEventListener('blur', function(){
+      setTimeout(function(){ list.style.display = 'none'; }, 150);
+    });
+  }
+
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', setup);
   } else {
