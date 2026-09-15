@@ -1046,9 +1046,18 @@
           <div class="autocomplete-list" id="wdSuggestList" style="display:none;"></div>
         </div>
       </div>
-      <div class="field">
-        <label>ราคา (บาท)</label>
-        <input type="number" step="0.01" id="wdPrice" placeholder="เช่น 1,075">
+      <div class="row2">
+        <div class="field">
+          <label>ราคา/หน่วย (บาท)</label>
+          <input type="number" step="0.01" id="wdPrice" placeholder="เช่น 1,075" oninput="calcWdPreview()">
+        </div>
+        <div class="field">
+          <label>จำนวน</label>
+          <input type="number" step="0.01" id="wdQty" placeholder="เช่น 5" oninput="calcWdPreview()">
+        </div>
+      </div>
+      <div id="wdPreview" style="display:none;" class="cost-calc-preview">
+        <i class="ti ti-calculator"></i> <span id="wdPreviewText"></span>
       </div>
       <button class="btn full" onclick="saveWithdraw()">
         <i class="ti ti-device-floppy"></i> บันทึกรายการเบิกของ
@@ -5174,8 +5183,9 @@ function renderWithdrawTab(){
   const pondSel = document.getElementById('wdPond');
   if(!pondSel) return;
   const prevVal = pondSel.value;
-  pondSel.innerHTML = STATE.ponds.map(p=>`<option value="${p.id}">บ่อ ${p.id}</option>`).join('');
-  if(prevVal && STATE.ponds.some(p=>p.id===prevVal)) pondSel.value = prevVal;
+  const withdrawPonds = STATE.ponds.filter(p => /^\d/.test(p.id)); // บ่อเลี้ยง 1-17 เท่านั้น (ไม่รวม T2/KC)
+  pondSel.innerHTML = withdrawPonds.map(p=>`<option value="${p.id}">บ่อ ${p.id}</option>`).join('');
+  if(prevVal && withdrawPonds.some(p=>p.id===prevVal)) pondSel.value = prevVal;
 
   const dateEl = document.getElementById('wdDate');
   if(dateEl && !dateEl.value) dateEl.value = todayStr();
@@ -5186,27 +5196,45 @@ function renderWithdrawTab(){
   renderWithdrawHistory();
 }
 
+function calcWdPreview(){
+  const p = parseFloat(document.getElementById('wdPrice').value) || 0;
+  const q = parseFloat(document.getElementById('wdQty').value) || 0;
+  const preview = document.getElementById('wdPreview');
+  const previewText = document.getElementById('wdPreviewText');
+  if(p > 0 && q > 0){
+    const total = p * q;
+    previewText.textContent = p.toLocaleString('th-TH') + ' x ' + q.toLocaleString('th-TH') + ' = ' + total.toLocaleString('th-TH') + ' บาท';
+    preview.style.display = 'block';
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
 function saveWithdraw(){
   const pondId = document.getElementById('wdPond').value;
   const name = document.getElementById('wdName').value.trim();
-  const price = parseFloat(document.getElementById('wdPrice').value);
+  const priceUnit = parseFloat(document.getElementById('wdPrice').value);
+  const qty = parseFloat(document.getElementById('wdQty').value) || 1;
   const date = document.getElementById('wdDate').value || todayStr();
   if(!name){ showToast('กรุณาใส่ชื่อรายการ'); return; }
-  if(!price || price <= 0){ showToast('กรุณาใส่ราคา'); return; }
+  if(!priceUnit || priceUnit <= 0){ showToast('กรุณาใส่ราคา'); return; }
   const cycle = getCurrentCycle(pondId);
   if(!cycle){ showToast('บ่อนี้ยังไม่มีข้อมูลรอบการเลี้ยง เบิกของไม่ได้'); return; }
+  const total = priceUnit * qty;
 
   if(!STATE.pondCosts2) STATE.pondCosts2 = {};
   if(!STATE.pondCosts2[cycle.cycleId]) STATE.pondCosts2[cycle.cycleId] = {};
   const bucket = STATE.pondCosts2[cycle.cycleId];
   if(!bucket._custom) bucket._custom = [];
-  bucket._custom.push({ name, amount: price, date, user: STATE.currentUser, ts: Date.now(), source: 'withdraw' });
+  bucket._custom.push({ name, amount: total, priceUnit, qty, date, user: STATE.currentUser, ts: Date.now(), source: 'withdraw' });
 
-  logActivity('เบิกของ', `บ่อ ${pondId} — ${name} ${price.toLocaleString('th-TH')} บาท`);
+  logActivity('เบิกของ', `บ่อ ${pondId} — ${name} x${qty} รวม ${total.toLocaleString('th-TH')} บาท`);
   saveState();
 
   document.getElementById('wdName').value = '';
   document.getElementById('wdPrice').value = '';
+  document.getElementById('wdQty').value = '';
+  calcWdPreview();
   showToast('✅ บันทึกรายการเบิกของแล้ว');
   renderWithdrawHistory();
 }
@@ -5228,12 +5256,14 @@ function renderWithdrawHistory(){
     return;
   }
   rows.sort((a,b)=> (b.ts||0) - (a.ts||0));
-  let html = '<table><thead><tr><th>วันที่</th><th>บ่อ</th><th>รายการ</th><th>ราคา</th><th>โดย</th><th></th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>วันที่</th><th>บ่อ</th><th>รายการ</th><th>จำนวน</th><th>ราคารวม</th><th>โดย</th><th></th></tr></thead><tbody>';
   rows.forEach(r=>{
+    const qtyStr = r.qty != null ? r.qty.toLocaleString('th-TH') + (r.priceUnit!=null ? ' × '+r.priceUnit.toLocaleString('th-TH') : '') : '-';
     html += `<tr>
       <td>${formatDateShort(r.date)}</td>
       <td>บ่อ ${r.pondId}</td>
       <td>${r.name}</td>
+      <td>${qtyStr}</td>
       <td>${(parseFloat(r.amount)||0).toLocaleString('th-TH')}</td>
       <td>${r.user||'-'}</td>
       <td><button class="icon-btn" onclick="removeWithdrawItem('${r.cycleId}',${r.idx})">🗑️</button></td>
@@ -5278,7 +5308,8 @@ function removeWithdrawItem(cycleId, idx){
           inp.value = p.name;
           if(p.priceUnit){ document.getElementById('wdPrice').value = p.priceUnit; }
           list.style.display = 'none';
-          document.getElementById('wdPrice').focus();
+          calcWdPreview();
+          document.getElementById('wdQty').focus();
         });
         list.appendChild(div);
       });
