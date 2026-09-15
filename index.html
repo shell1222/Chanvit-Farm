@@ -4262,8 +4262,15 @@ function showYearlyDetail(type){
 function renderSummaryTab(){
   const year = new Date().getFullYear().toString();
   let entries = [];
-  getYearCycles(year).forEach(({pondId, cycle}) => {
-    entries.push({ pondId, cycleId: cycle.cycleId, status: cycle });
+  // Walk each pond's cycles in stored (chronological) order so （รอบ N） labeling below comes
+  // out correctly, including cycles with no releaseDate (can't be filed under a year, but
+  // shown anyway so they stay reachable/editable — e.g. to fill in the date later).
+  STATE.ponds.forEach(p => {
+    getPondCycles(p.id).forEach(cycle => {
+      if((cycle.releaseDate && cycle.releaseDate.startsWith(year)) || !cycle.releaseDate){
+        entries.push({ pondId: p.id, cycleId: cycle.cycleId, status: cycle });
+      }
+    });
   });
   entries = labelCyclesByPond(entries); // adds （รอบ N） when a pond has >1 cycle this year
   const getVal = (e, col) => {
