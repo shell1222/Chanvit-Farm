@@ -5228,6 +5228,13 @@ function saveWithdraw(){
   if(!bucket._custom) bucket._custom = [];
   bucket._custom.push({ name, amount: total, priceUnit, qty, date, user: STATE.currentUser, ts: Date.now(), source: 'withdraw' });
 
+  // รายการใหม่ที่ยังไม่มีในฐานข้อมูลสินค้า — เก็บชื่อ+ราคาไว้อัตโนมัติเพื่อให้ autocomplete แนะนำได้ในครั้งถัดไป
+  if(!STATE.productCatalog) STATE.productCatalog = [];
+  const knownProduct = STATE.productCatalog.find(p => p.name === name);
+  if(!knownProduct){
+    STATE.productCatalog.push({ name, category: 'other', priceUnit, unit: '' });
+  }
+
   logActivity('เบิกของ', `บ่อ ${pondId} — ${name} x${qty} รวม ${total.toLocaleString('th-TH')} บาท`);
   saveState();
 
