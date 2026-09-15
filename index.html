@@ -723,9 +723,14 @@
       <div class="field">
         <label>สถานะ</label>
         <div class="pill-toggle" id="pondStatusToggle">
-          <button onclick="setPondStatus('active')">กำลังเลี้ยง</button>
+          <button id="pondStatusToggleActiveBtn" onclick="setPondStatus('active')">กำลังเลี้ยง</button>
           <button onclick="setPondStatus('closed')">ปิดบ่อ / ว่าง</button>
         </div>
+      </div>
+
+      <div class="field" id="pondStartNewCycleWrap" style="display:none;">
+        <button style="width:100%;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;" onclick="startNewCycle(selectedPondId)">🌱 เริ่มรอบใหม่</button>
+        <p class="hint" style="margin-top:4px;">บ่อนี้ปิดรอบล่าสุดแล้ว กดเพื่อเริ่มลงกุ้งรอบใหม่ — ข้อมูลรอบเก่าจะยังอยู่ครบในตารางสรุปผล</p>
       </div>
 
       <div id="pondActiveFields" style="display:none;">
@@ -1259,17 +1264,83 @@ let STATE = {
   waterRecords: [],   // [{date, period, pondId, ph, transparency, user, ts}]
   growthRecords: [],  // [{date, pondId, age, weightWithBasket, basketWeight, shrimpCountPairs, mbw, pdg, size, feed, accFeed, user, ts}]
   logo: DEFAULT_LOGO,
-  pondStatus: {},     // {pondId: {status:'active'|'closed', ...closeDetails}}
-  pondCosts: {},      // legacy cost from status tab
-  pondCosts2: {},     // {pondId: {postlarva, feed, ...}} summary totals
-  pondCostDetails: {},// {pondId: [{category, name, priceUnit, qty, unit, total, user, ts}]}
-  pondHarvests: {},   // {pondId: [{type:'partial'|'close', kg, price, revenue}]}
+  pondStatus: {},     // legacy: {pondId: {status:'active'|'closed', ...closeDetails}} — superseded by pondCycles, kept for backward-compat migration only
+  pondCycles: {},     // {pondId: [{cycleId, status:'active'|'closed', ...closeDetails}, ...]} — one entry per stocking cycle, chronological
+  pondCosts: {},      // legacy cost from status tab — keyed by cycleId
+  pondCosts2: {},     // {cycleId: {postlarva, feed, ...}} summary totals
+  pondCostDetails: {},// {cycleId: [{category, name, priceUnit, qty, unit, total, user, ts}]}
+  pondHarvests: {},   // {cycleId: [{type:'partial'|'close', kg, price, revenue}]}
   productCatalog: [], // unified product db (built-in + custom), saved to localStorage
   activityLog: [],    // [{ts, user, type, detail}]
   userRoles: {},      // {username: 'admin'|'superuser'|'user'}
   pinUsers: [],       // usernames that require PIN to login
   userPins: {}        // {username: '123456'}
 };
+
+// ─── Pond cycle helpers ───
+// A pond can have many stocking cycles over time (STATE.pondCycles[pondId] = [cycle, ...],
+// chronological). pondHarvests/pondCosts/pondCosts2/pondCostDetails are keyed by cycleId.
+function makeCycleId(pondId, releaseDate, ts){
+  return pondId + '_' + (releaseDate || 'unk') + '_' + (ts || 0);
+}
+function getPondCycles(pondId){
+  return (STATE.pondCycles && STATE.pondCycles[pondId]) || [];
+}
+function getCurrentCycle(pondId){
+  const cycles = getPondCycles(pondId);
+  return cycles.length ? cycles[cycles.length - 1] : null;
+}
+function getCycleById(cycleId){
+  if(!cycleId || !STATE.pondCycles) return null;
+  for(const pondId in STATE.pondCycles){
+    const cycles = STATE.pondCycles[pondId];
+    for(let i = 0; i < cycles.length; i++){
+      if(cycles[i].cycleId === cycleId) return {pondId, cycle: cycles[i], index: i};
+    }
+  }
+  return null;
+}
+function getYearCycles(year){
+  const out = [];
+  if(!STATE.pondCycles) return out;
+  Object.keys(STATE.pondCycles).forEach(pondId=>{
+    getPondCycles(pondId).forEach(cycle=>{
+      if(cycle.releaseDate && cycle.releaseDate.startsWith(year)) out.push({pondId, cycle});
+    });
+  });
+  out.sort((a,b)=>{
+    if(a.pondId !== b.pondId) return a.pondId < b.pondId ? -1 : 1;
+    return (a.cycle.releaseDate||'') < (b.cycle.releaseDate||'') ? -1 : 1;
+  });
+  return out;
+}
+// Adds a "（รอบ N）" suffix label to entries whose pond has more than one cycle in the list.
+function labelCyclesByPond(entries){
+  const countByPond = {};
+  entries.forEach(e => { countByPond[e.pondId] = (countByPond[e.pondId]||0) + 1; });
+  const seen = {};
+  return entries.map(e => {
+    if(countByPond[e.pondId] <= 1) return { ...e, cycleLabel: '', cycleIndex: 1 };
+    seen[e.pondId] = (seen[e.pondId]||0) + 1;
+    return { ...e, cycleLabel: '（รอบ ' + seen[e.pondId] + '）', cycleIndex: seen[e.pondId] };
+  });
+}
+function startNewCycle(pondId){
+  const cur = getCurrentCycle(pondId);
+  if(cur && cur.status !== 'closed'){ showToast('บ่อนี้ยังไม่ปิดรอบปัจจุบัน ปิดบ่อก่อนจึงจะเริ่มรอบใหม่ได้'); return; }
+  if(!STATE.pondCycles) STATE.pondCycles = {};
+  if(!STATE.pondCycles[pondId]) STATE.pondCycles[pondId] = [];
+  const newCycle = {
+    cycleId: makeCycleId(pondId, null, Date.now()),
+    status: 'active', user: STATE.currentUser, ts: Date.now(),
+    releaseDate: null, fromPond: null, hatchery: null, orderQty: null, population: null,
+    stockWeight: null, stockAge: null, stressTest: null, sal: null,
+    partial1Date: null, partial1: null, partial1Size: null, partial1Price: null,
+    partial2Date: null, partial2: null, partial2Size: null, partial2Price: null
+  };
+  STATE.pondCycles[pondId].push(newCycle);
+  openPondDetail(pondId);
+}
 
 const FEED_TABLE = [
   {age:1,mbw:0.08624,feedPer100k:1},{age:2,mbw:0.17248,feedPer100k:1},{age:3,mbw:0.25872,feedPer100k:1},
@@ -1376,6 +1447,28 @@ function applyLoaded(loaded){
   STATE.pondCosts2 = loaded.pondCosts2 || {};
   STATE.pondCostDetails = loaded.pondCostDetails || {};
   STATE.pondHarvests = loaded.pondHarvests || {};
+  // Migrate legacy single-record-per-pond pondStatus into pondCycles (one array entry per
+  // stocking cycle). Idempotent: only runs when pondCycles hasn't been saved yet, so repeat
+  // loads (including every realtime onSnapshot fire) never re-migrate or duplicate cycles.
+  STATE.pondCycles = loaded.pondCycles || null;
+  if(!STATE.pondCycles){
+    STATE.pondCycles = {};
+    const remapHarvests = {}, remapCosts = {}, remapCosts2 = {}, remapCostDetails = {};
+    Object.keys(STATE.pondStatus).forEach(pondId => {
+      const legacy = STATE.pondStatus[pondId];
+      if(!legacy) return;
+      const cycleId = makeCycleId(pondId, legacy.releaseDate, legacy.ts);
+      STATE.pondCycles[pondId] = [{ ...legacy, cycleId }];
+      if(STATE.pondHarvests[pondId])    remapHarvests[cycleId]    = STATE.pondHarvests[pondId];
+      if(STATE.pondCosts[pondId])       remapCosts[cycleId]       = STATE.pondCosts[pondId];
+      if(STATE.pondCosts2[pondId])      remapCosts2[cycleId]      = STATE.pondCosts2[pondId];
+      if(STATE.pondCostDetails[pondId]) remapCostDetails[cycleId] = STATE.pondCostDetails[pondId];
+    });
+    STATE.pondHarvests = remapHarvests;
+    STATE.pondCosts = remapCosts;
+    STATE.pondCosts2 = remapCosts2;
+    STATE.pondCostDetails = remapCostDetails;
+  }
   STATE.productCatalog = loaded.productCatalog && loaded.productCatalog.length > 0
     ? loaded.productCatalog : JSON.parse(JSON.stringify(PRODUCT_CATALOG));
   STATE.activityLog = loaded.activityLog || [];
@@ -1387,7 +1480,7 @@ function applyLoaded(loaded){
   STATE.feedMixItems = loaded.feedMixItems || [];
 }
 function resetState(){
-  STATE.ponds = DEFAULT_PONDS; STATE.users = []; STATE.pondStatus = {};
+  STATE.ponds = DEFAULT_PONDS; STATE.users = []; STATE.pondStatus = {}; STATE.pondCycles = {};
   STATE.pondCosts = {}; STATE.pondCosts2 = {}; STATE.pondCostDetails = {}; STATE.pondHarvests = {};
   STATE.productCatalog = JSON.parse(JSON.stringify(PRODUCT_CATALOG));
   STATE.activityLog = [];
@@ -1471,6 +1564,7 @@ async function saveState(){
     growthRecords: STATE.growthRecords,
     logo: STATE.logo,
     pondStatus: STATE.pondStatus,
+    pondCycles: STATE.pondCycles || {},
     pondCosts: STATE.pondCosts,
     pondCosts2: STATE.pondCosts2 || {},
     pondCostDetails: STATE.pondCostDetails || {},
@@ -1971,7 +2065,7 @@ function switchTab(name){
    FEED TAB
    ============================================================ */
 function getActivePonds(){
-  return STATE.ponds.filter(p=>{ const s=STATE.pondStatus[p.id]; return s && s.status==='active'; });
+  return STATE.ponds.filter(p=>{ const s=getCurrentCycle(p.id); return s && s.status==='active'; });
 }
 
 function renderFeedTab(){
@@ -2204,7 +2298,7 @@ function renderGrowthTab(){
 
   const pondSelect = document.getElementById('growthPond');
   pondSelect.innerHTML = STATE.ponds.filter(p=>{
-    const ps = STATE.pondStatus[p.id];
+    const ps = getCurrentCycle(p.id);
     return ps && ps.status === 'active';
   }).map(p=>`<option value="${p.id}">บ่อ ${p.id}</option>`).join('');
 
@@ -2224,7 +2318,7 @@ function loadPondGrowthInfo(){
   }
 
   const growthDate = document.getElementById('growthDate').value || todayStr();
-  const ps2 = STATE.pondStatus[pondId];
+  const ps2 = getCurrentCycle(pondId);
 
   // คำนวณอาหารสะสม: ใช้ accFeed รอบสุ่มก่อนหน้าเป็นฐาน + อาหารที่บันทึกหลังจากนั้น
   const prevWithAcc = history.filter(r=>r.accFeed!=null && r.date < growthDate)
@@ -2569,7 +2663,7 @@ function renderPondMap(){
   POND_MAP_LAYOUT.forEach(p=>{
     const isPond = STATE.ponds.find(sp=>sp.id===p.id);
     const isReservoir = p.type === 'reservoir' || p.type === 'canal';
-    const status = STATE.pondStatus[p.id];
+    const status = getCurrentCycle(p.id);
     let fillColor = p.color;
     let opacity = 1;
     let clickable = false;
@@ -2636,9 +2730,9 @@ function renderPondMap(){
   svg += '</svg>';
   wrap.innerHTML = svg;
 
-  const activePonds = STATE.ponds.filter(p => STATE.pondStatus[p.id] && STATE.pondStatus[p.id].status === 'active');
+  const activePonds = STATE.ponds.filter(p => { const c = getCurrentCycle(p.id); return c && c.status === 'active'; });
   const activeArea = activePonds.reduce((s, p) => s + (parseFloat(p.area) || 0), 0);
-  const emptyPonds = STATE.ponds.filter(p => !STATE.pondStatus[p.id] || STATE.pondStatus[p.id].status !== 'active');
+  const emptyPonds = STATE.ponds.filter(p => { const c = getCurrentCycle(p.id); return !c || c.status !== 'active'; });
   const statsEl = document.getElementById('pondMapStats');
   if(statsEl){
     statsEl.innerHTML = `
@@ -2659,7 +2753,7 @@ function renderPondStatusTab(){
 function openPondDetail(pondId){
   if(currentRole()==='user'){ showToast('ไม่มีสิทธิ์ดูรายละเอียดบ่อ'); return; }
   selectedPondId = pondId;
-  const status = STATE.pondStatus[pondId] || {status:'active'};
+  const status = getCurrentCycle(pondId) || {status:'active'};
   logActivity('เปิดดูบ่อ', 'บ่อ ' + pondId);
   document.getElementById('pondDetailCard').style.display = 'block';
   document.getElementById('pondDetailTitle').textContent = pondId;
@@ -2667,6 +2761,11 @@ function openPondDetail(pondId){
   document.querySelectorAll('#pondStatusToggle button').forEach((b,i)=>{
     b.classList.toggle('active', (i===0 && status.status==='active') || (i===1 && status.status==='closed'));
   });
+  // A closed cycle is done — don't let the toggle silently reopen/overwrite it; force
+  // the explicit "เริ่มรอบใหม่" flow (startNewCycle) instead so old cycle data is kept.
+  const activeToggleBtn = document.getElementById('pondStatusToggleActiveBtn');
+  if(activeToggleBtn) activeToggleBtn.disabled = status.status === 'closed';
+  document.getElementById('pondStartNewCycleWrap').style.display = status.status === 'closed' ? 'block' : 'none';
   document.getElementById('pondActiveFields').style.display = status.status==='closed' ? 'none' : 'block';
   document.getElementById('pondClosedFields').style.display = status.status==='closed' ? 'block' : 'none';
   if(status.status !== 'closed'){
@@ -2727,8 +2826,18 @@ function openPondDetail(pondId){
 
 function setPondStatus(status){
   if(!selectedPondId) return;
-  if(!STATE.pondStatus[selectedPondId]) STATE.pondStatus[selectedPondId] = {status:'active'};
-  STATE.pondStatus[selectedPondId].status = status;
+  let cycle = getCurrentCycle(selectedPondId);
+  if(!cycle){
+    cycle = { cycleId: makeCycleId(selectedPondId, null, Date.now()), status: 'active' };
+    if(!STATE.pondCycles[selectedPondId]) STATE.pondCycles[selectedPondId] = [];
+    STATE.pondCycles[selectedPondId].push(cycle);
+  }
+  if(cycle.status === 'closed' && status === 'active'){
+    // A closed cycle must not be silently reopened/overwritten — use "เริ่มรอบใหม่" instead.
+    showToast('บ่อนี้ปิดรอบแล้ว กด "เริ่มรอบใหม่" เพื่อลงกุ้งรอบใหม่');
+    return;
+  }
+  cycle.status = status;
   document.querySelectorAll('#pondStatusToggle button').forEach((b,i)=>{
     b.classList.toggle('active', (i===0 && status==='active') || (i===1 && status==='closed'));
   });
@@ -2762,11 +2871,17 @@ function setPondStatus(status){
 
 function savePondStatus(){
   if(!selectedPondId) return;
-  const current = STATE.pondStatus[selectedPondId] || {status:'active'};
+  let cycle = getCurrentCycle(selectedPondId);
+  if(!cycle){
+    cycle = { cycleId: makeCycleId(selectedPondId, null, Date.now()), status: 'active' };
+    if(!STATE.pondCycles[selectedPondId]) STATE.pondCycles[selectedPondId] = [];
+    STATE.pondCycles[selectedPondId].push(cycle);
+  }
+  const current = cycle;
   const status = current.status || 'active';
 
   // เริ่มจาก record ใหม่ แต่คงข้อมูลการปล่อยลูกกุ้งไว้เสมอ
-  const prev = STATE.pondStatus[selectedPondId] || {};
+  const prev = cycle;
   const record = {
     status,
     user: STATE.currentUser,
@@ -2849,7 +2964,7 @@ function savePondStatus(){
     ].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   }
 
-  STATE.pondStatus[selectedPondId] = record;
+  Object.assign(cycle, record); // mutate the existing cycle in place — keeps cycleId, never drops fields from other cycles
   logActivity('บันทึกสถานะบ่อ', 'บ่อ ' + selectedPondId + ' (' + (status==='active' ? 'กำลังเลี้ยง' : 'ปิดบ่อ') + ')');
   saveState();
   renderPondMap();
@@ -2867,7 +2982,7 @@ function calcPartialDoc(prefix, num){
   if(!dateEl || !docEl) return;
   const partialDate = dateEl.value;
   if(!partialDate){ docEl.value = ''; return; }
-  const status = (selectedPondId && STATE.pondStatus[selectedPondId]) || {};
+  const status = (selectedPondId && getCurrentCycle(selectedPondId)) || {};
   const relDateVal = prefix === 'active'
     ? (document.getElementById('activeReleaseDate')?.value || status.releaseDate || '')
     : (status.releaseDate || '');
@@ -2880,7 +2995,7 @@ function calcPartialDoc(prefix, num){
 function renderPondCostList(){
   const wrap = document.getElementById('pondCostList');
   if(!wrap) return;
-  const costs = STATE.pondCosts[costSelectedPond] || [];
+  const costs = STATE.pondCosts[costSelectedCycleId] || [];
   if(costs.length===0){
     wrap.innerHTML = `<div class="empty-state" style="padding:16px;"><i class="ti ti-receipt"></i>ยังไม่มีรายการต้นทุน</div>`;
     document.getElementById('pondCostTotal').textContent = '0';
@@ -2907,20 +3022,20 @@ function renderPondCostList(){
 }
 
 let _costModalPieChart = null;
-let _costModalPondId   = null;
+let _costModalCycleId  = null;
 const COST_DRILL_PALETTE = ['#3b82f6','#22c55e','#f97316','#a855f7','#06b6d4','#eab308','#f43f5e','#14b8a6','#8b5cf6','#fb923c','#ec4899','#84cc16'];
 const PROD_CATS = ['water_cond','chemical_dis','microbe','supplement','equipment','other'];
 
-function renderCostModalPieChart(pondId, drillCat, drillSubCat){
-  if(pondId) _costModalPondId = pondId;
-  const pid  = _costModalPondId;
+function renderCostModalPieChart(cycleId, drillCat, drillSubCat){
+  if(cycleId) _costModalCycleId = cycleId;
+  const cid  = _costModalCycleId;
   const wrap = document.getElementById('costModalPieWrap');
-  if(!wrap || !pid) return;
+  if(!wrap || !cid) return;
 
-  const costs2   = (STATE.pondCosts2 && STATE.pondCosts2[pid]) || {};
-  const details  = (STATE.pondCostDetails && STATE.pondCostDetails[pid]) || [];
-  const s        = STATE.pondStatus && STATE.pondStatus[pid];
-  const _hvRev   = (STATE.pondHarvests && STATE.pondHarvests[pid]) || [];
+  const costs2   = (STATE.pondCosts2 && STATE.pondCosts2[cid]) || {};
+  const details  = (STATE.pondCostDetails && STATE.pondCostDetails[cid]) || [];
+  const s        = (getCycleById(cid)||{}).cycle;
+  const _hvRev   = (STATE.pondHarvests && STATE.pondHarvests[cid]) || [];
   const _hvKg    = _hvRev.reduce((sum,h)=>sum+(parseFloat(h.kg)||0),0);
   const _catchKg = s ? (parseFloat(s.partial1)||0)+(parseFloat(s.partial2)||0)+(parseFloat(s.closed)||0) : 0;
   const totalKg  = parseFloat(s&&s.total) || _hvKg || _catchKg || 0;
@@ -3070,11 +3185,11 @@ function renderCostModalPieChart(pondId, drillCat, drillSubCat){
 let _costPieChart = null;
 function renderCostPieChart(){
   const wrap = document.getElementById('costPieWrap');
-  if(!wrap || !costSelectedPond){ if(wrap) wrap.style.display='none'; return; }
+  if(!wrap || !costSelectedCycleId){ if(wrap) wrap.style.display='none'; return; }
 
   // Primary source: pondCostDetails (product records with category)
-  const items = (STATE.pondCostDetails && STATE.pondCostDetails[costSelectedPond]) || [];
-  const ps = STATE.pondStatus && STATE.pondStatus[costSelectedPond];
+  const items = (STATE.pondCostDetails && STATE.pondCostDetails[costSelectedCycleId]) || [];
+  const ps = (getCycleById(costSelectedCycleId)||{}).cycle;
   const yieldKg = ps && ps.yield ? parseFloat(ps.yield) : null;
 
   const catTotals = {};
@@ -3085,7 +3200,7 @@ function renderCostPieChart(){
 
   // Fallback: use pondCosts2 fixed cost table if no product records
   if(Object.keys(catTotals).length === 0){
-    const fixed = (STATE.pondCosts2 && STATE.pondCosts2[costSelectedPond]) || {};
+    const fixed = (STATE.pondCosts2 && STATE.pondCosts2[costSelectedCycleId]) || {};
     COST_ITEMS.forEach(item => {
       const val = parseFloat(fixed[item.id]) || 0;
       if(val > 0) catTotals[item.id] = (catTotals[item.id] || 0) + val;
@@ -3160,7 +3275,7 @@ function renderCostPieChart(){
 }
 
 function addPondCost(){
-  if(!costSelectedPond){ showToast('กรุณาเลือกบ่อก่อน'); return; }
+  if(!costSelectedPond || !costSelectedCycleId){ showToast('กรุณาเลือกบ่อก่อน'); return; }
   const date = document.getElementById('costDate').value;
   const category = document.getElementById('costCategory').value;
   const name = document.getElementById('costName').value.trim();
@@ -3180,9 +3295,9 @@ function addPondCost(){
     user: STATE.currentUser, ts: Date.now()
   };
 
-  if(!STATE.pondCosts[costSelectedPond]) STATE.pondCosts[costSelectedPond] = [];
-  STATE.pondCosts[costSelectedPond].push(entry);
-  STATE.pondCosts[costSelectedPond].sort((a,b)=> a.date < b.date ? 1 : -1);
+  if(!STATE.pondCosts[costSelectedCycleId]) STATE.pondCosts[costSelectedCycleId] = [];
+  STATE.pondCosts[costSelectedCycleId].push(entry);
+  STATE.pondCosts[costSelectedCycleId].sort((a,b)=> a.date < b.date ? 1 : -1);
   saveState();
 
   document.getElementById('costName').value='';
@@ -3196,7 +3311,7 @@ function addPondCost(){
 
 function removePondCost(idx){
   if(!confirm('ลบรายการต้นทุนนี้หรือไม่?')) return;
-  STATE.pondCosts[costSelectedPond].splice(idx,1);
+  STATE.pondCosts[costSelectedCycleId].splice(idx,1);
   saveState();
   renderPondCostList();
   showToast('ลบรายการแล้ว');
@@ -3425,26 +3540,26 @@ function removePond(idx){
 /* ============================================================
    HISTORY TAB
    ============================================================ */
-function toggleHarvestForm(pondId){
-  const f = document.getElementById('harvestForm_'+pondId);
+function toggleHarvestForm(cycleId){
+  const f = document.getElementById('harvestForm_'+cycleId);
   const show = f.style.display === 'none';
   f.style.display = show ? 'block' : 'none';
   if(show){
     if(!STATE.pondHarvests) STATE.pondHarvests = {};
-    if(!STATE.pondHarvests[pondId] || STATE.pondHarvests[pondId].length === 0){
-      const s = STATE.pondStatus[pondId] || {};
-      STATE.pondHarvests[pondId] = s.revenue
+    if(!STATE.pondHarvests[cycleId] || STATE.pondHarvests[cycleId].length === 0){
+      const s = (getCycleById(cycleId)||{}).cycle || {};
+      STATE.pondHarvests[cycleId] = s.revenue
         ? [{type:'close',kg:s.closed||'',price:'',revenue:s.revenue,size:s.closedSize||''}]
         : [{type:'partial',kg:s.partial1||'',price:'',size:s.partial1Size||''}];
     }
-    renderHarvestRows(pondId);
+    renderHarvestRows(cycleId);
     setTimeout(()=>{ f.scrollIntoView({behavior:'smooth',block:'nearest'}); },50);
   }
 }
 
-function renderHarvestRows(pondId){
-  const rows = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
-  const container = document.getElementById('harvestRows_'+pondId);
+function renderHarvestRows(cycleId){
+  const rows = (STATE.pondHarvests && STATE.pondHarvests[cycleId]) || [];
+  const container = document.getElementById('harvestRows_'+cycleId);
   if(!container) return;
   container.innerHTML = '';
   const inp = 'border:1.5px solid #a7f3d0;border-radius:8px;padding:6px 8px;font-size:13px;background:#fff;width:100%;box-sizing:border-box;';
@@ -3453,75 +3568,77 @@ function renderHarvestRows(pondId){
     const rev = (parseFloat(kg) && parseFloat(price)) ? parseFloat(kg)*parseFloat(price) : 0;
     const d = document.createElement('div');
     d.style.cssText = 'display:grid;grid-template-columns:70px 1fr 68px 1fr 1fr 26px;gap:4px;align-items:center;margin-bottom:6px;';
-    d.innerHTML = `<input type="text" id="htype_${pondId}_${i}" value="${row.type||'Partial'}" placeholder="ประเภท" style="${inp}font-size:12px;">
-      <input type="number" id="hkg_${pondId}_${i}" value="${kg}" placeholder="กก." step="0.01" style="${inp}" oninput="calcHarvestTotal('${pondId}')">
-      <input type="number" id="hsize_${pondId}_${i}" value="${size}" placeholder="ตัว/กก." step="1" style="${inp}font-size:12px;">
-      <input type="number" id="hprice_${pondId}_${i}" value="${price}" placeholder="฿/กก." step="0.01" style="${inp}" oninput="calcHarvestTotal('${pondId}')">
-      <span id="hrev_${pondId}_${i}" style="font-size:12px;font-weight:700;color:var(--primary-dark);text-align:right;">${rev>0?rev.toLocaleString('th-TH'):'-'}</span>
-      <button onclick="removeHarvestRow('${pondId}',${i})" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:15px;padding:0;line-height:1;">✕</button>`;
+    d.innerHTML = `<input type="text" id="htype_${cycleId}_${i}" value="${row.type||'Partial'}" placeholder="ประเภท" style="${inp}font-size:12px;">
+      <input type="number" id="hkg_${cycleId}_${i}" value="${kg}" placeholder="กก." step="0.01" style="${inp}" oninput="calcHarvestTotal('${cycleId}')">
+      <input type="number" id="hsize_${cycleId}_${i}" value="${size}" placeholder="ตัว/กก." step="1" style="${inp}font-size:12px;">
+      <input type="number" id="hprice_${cycleId}_${i}" value="${price}" placeholder="฿/กก." step="0.01" style="${inp}" oninput="calcHarvestTotal('${cycleId}')">
+      <span id="hrev_${cycleId}_${i}" style="font-size:12px;font-weight:700;color:var(--primary-dark);text-align:right;">${rev>0?rev.toLocaleString('th-TH'):'-'}</span>
+      <button onclick="removeHarvestRow('${cycleId}',${i})" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:15px;padding:0;line-height:1;">✕</button>`;
     container.appendChild(d);
   });
-  calcHarvestTotal(pondId);
+  calcHarvestTotal(cycleId);
 }
 
-function addHarvestRow(pondId){
+function addHarvestRow(cycleId){
   if(!STATE.pondHarvests) STATE.pondHarvests = {};
-  if(!STATE.pondHarvests[pondId]) STATE.pondHarvests[pondId] = [];
-  _syncHarvestDom(pondId);
-  STATE.pondHarvests[pondId].push({type:'partial',kg:'',price:''});
-  renderHarvestRows(pondId);
+  if(!STATE.pondHarvests[cycleId]) STATE.pondHarvests[cycleId] = [];
+  _syncHarvestDom(cycleId);
+  STATE.pondHarvests[cycleId].push({type:'partial',kg:'',price:''});
+  renderHarvestRows(cycleId);
 }
 
-function removeHarvestRow(pondId,idx){
-  _syncHarvestDom(pondId);
-  STATE.pondHarvests[pondId].splice(idx,1);
-  renderHarvestRows(pondId);
+function removeHarvestRow(cycleId,idx){
+  _syncHarvestDom(cycleId);
+  STATE.pondHarvests[cycleId].splice(idx,1);
+  renderHarvestRows(cycleId);
 }
 
-function _syncHarvestDom(pondId){
-  const rows = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+function _syncHarvestDom(cycleId){
+  const rows = (STATE.pondHarvests && STATE.pondHarvests[cycleId]) || [];
   rows.forEach((row,i)=>{
-    row.type  = document.getElementById('htype_'+pondId+'_'+i)?.value || 'partial';
-    row.kg    = document.getElementById('hkg_'+pondId+'_'+i)?.value || '';
-    row.size  = document.getElementById('hsize_'+pondId+'_'+i)?.value || '';
-    row.price = document.getElementById('hprice_'+pondId+'_'+i)?.value || '';
+    row.type  = document.getElementById('htype_'+cycleId+'_'+i)?.value || 'partial';
+    row.kg    = document.getElementById('hkg_'+cycleId+'_'+i)?.value || '';
+    row.size  = document.getElementById('hsize_'+cycleId+'_'+i)?.value || '';
+    row.price = document.getElementById('hprice_'+cycleId+'_'+i)?.value || '';
   });
 }
 
-function calcHarvestTotal(pondId){
-  const rows = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+function calcHarvestTotal(cycleId){
+  const rows = (STATE.pondHarvests && STATE.pondHarvests[cycleId]) || [];
   let total = 0;
   rows.forEach((row,i)=>{
-    const kg = parseFloat(document.getElementById('hkg_'+pondId+'_'+i)?.value) || 0;
-    const pr = parseFloat(document.getElementById('hprice_'+pondId+'_'+i)?.value) || 0;
+    const kg = parseFloat(document.getElementById('hkg_'+cycleId+'_'+i)?.value) || 0;
+    const pr = parseFloat(document.getElementById('hprice_'+cycleId+'_'+i)?.value) || 0;
     const rev = kg * pr;
     total += rev;
-    const el = document.getElementById('hrev_'+pondId+'_'+i);
+    const el = document.getElementById('hrev_'+cycleId+'_'+i);
     if(el) el.textContent = rev > 0 ? rev.toLocaleString('th-TH') : '-';
   });
-  const el = document.getElementById('harvestTotal_'+pondId);
+  const el = document.getElementById('harvestTotal_'+cycleId);
   if(el) el.textContent = total.toLocaleString('th-TH') + ' บาท';
   return total;
 }
 
-function saveHarvests(pondId){
+function saveHarvests(cycleId){
+  const found = getCycleById(cycleId);
+  if(!found) return;
+  const pondId = found.pondId;
+  const _ps = found.cycle;
   if(!STATE.pondHarvests) STATE.pondHarvests = {};
-  const rows = STATE.pondHarvests[pondId] || [];
+  const rows = STATE.pondHarvests[cycleId] || [];
   const harvests = []; let total = 0;
   rows.forEach((row,i)=>{
-    const type = document.getElementById('htype_'+pondId+'_'+i)?.value || 'partial';
-    const kg   = parseFloat(document.getElementById('hkg_'+pondId+'_'+i)?.value) || 0;
-    const size = parseFloat(document.getElementById('hsize_'+pondId+'_'+i)?.value) || null;
-    const price= parseFloat(document.getElementById('hprice_'+pondId+'_'+i)?.value) || 0;
+    const type = document.getElementById('htype_'+cycleId+'_'+i)?.value || 'partial';
+    const kg   = parseFloat(document.getElementById('hkg_'+cycleId+'_'+i)?.value) || 0;
+    const size = parseFloat(document.getElementById('hsize_'+cycleId+'_'+i)?.value) || null;
+    const price= parseFloat(document.getElementById('hprice_'+cycleId+'_'+i)?.value) || 0;
     const revenue = kg * price;
     total += revenue;
     harvests.push({type,kg,size,price,revenue});
   });
-  STATE.pondHarvests[pondId] = harvests;
-  if(!STATE.pondStatus[pondId]) STATE.pondStatus[pondId] = {};
-  STATE.pondStatus[pondId].revenue = total > 0 ? total : null;
-  // Sync kg/size back to pondStatus so partial1/partial2/closed stay in sync
-  const _ps = STATE.pondStatus[pondId];
+  STATE.pondHarvests[cycleId] = harvests;
+  _ps.revenue = total > 0 ? total : null;
+  // Sync kg/size back to this cycle so partial1/partial2/closed stay in sync
   const _partials = harvests.filter(h => h.type !== 'close');
   const _closeH   = harvests.find(h => h.type === 'close');
   _ps.partial1     = _partials[0] ? (parseFloat(_partials[0].kg)   || null) : null;
@@ -3532,15 +3649,16 @@ function saveHarvests(pondId){
   logActivity('บันทึกรายได้', 'บ่อ '+pondId);
   saveState();
   showToast('✅ บันทึกรายได้แล้ว');
-  openPondSummaryModal(pondId);
+  openPondSummaryModal(pondId, cycleId);
 }
 
 function closePondSummaryModal(){
   document.getElementById('pondSummaryModal').style.display = 'none';
 }
 
-function openPondSummaryModal(pondId){
-  const s = STATE.pondStatus[pondId] || {};
+function openPondSummaryModal(pondId, cycleId){
+  cycleId = cycleId || (getCurrentCycle(pondId)||{}).cycleId;
+  const s = (getCycleById(cycleId)||{}).cycle || {};
   const isClosed = s.status === 'closed';
 
   function chip(label, value, unit=''){
@@ -3569,7 +3687,7 @@ function openPondSummaryModal(pondId){
   let html = `
   <div style="background:linear-gradient(135deg,var(--primary) 0%,var(--primary-dark) 100%);border-radius:16px 16px 0 0;padding:22px 22px 18px;color:#fff;position:relative;">
     <div style="position:absolute;top:14px;right:14px;display:flex;gap:8px;z-index:10;">
-      <button onclick="openPondSummaryEditMode('${pondId}')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:8px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;min-height:36px;display:inline-flex;align-items:center;gap:4px;-webkit-tap-highlight-color:transparent;">✏️ แก้ไข</button>
+      <button onclick="openPondSummaryEditMode('${pondId}','${cycleId}')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:8px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;min-height:36px;display:inline-flex;align-items:center;gap:4px;-webkit-tap-highlight-color:transparent;">✏️ แก้ไข</button>
       <button onclick="closePondSummaryModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">✕</button>
     </div>
     <div style="font-size:12px;opacity:.75;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">รายละเอียดบ่อ</div>
@@ -3594,8 +3712,10 @@ function openPondSummaryModal(pondId){
     currentDOC = Math.round(_ms / 86400000);
   }
   const partialHarvestTotal = (parseFloat(s.partial1)||0) + (parseFloat(s.partial2)||0);
+  // Filter to this cycle's own date range so growth data from an older/newer cycle of the
+  // same pond doesn't bleed into this cycle's FCR/ADG/size display.
   const latestGrowthRec = (STATE.growthRecords||[])
-    .filter(r=>r.pondId===pondId && r.mbw)
+    .filter(r=>r.pondId===pondId && r.mbw && (!s.releaseDate || r.date >= s.releaseDate) && (!s.closeDate || r.date <= s.closeDate))
     .sort((a,b)=>a.date<b.date?1:-1)[0];
   const currentFCR = latestGrowthRec && latestGrowthRec.accFeed && partialHarvestTotal>0
     ? (parseFloat(latestGrowthRec.accFeed)/partialHarvestTotal).toFixed(2) : null;
@@ -3604,7 +3724,7 @@ function openPondSummaryModal(pondId){
   let displayTotal, displayYield, displayDOC, displayFCR;
   if(isClosed){
     // Auto-calculate from raw data; manual overrides only if explicitly set
-    const hvs2 = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+    const hvs2 = (STATE.pondHarvests && STATE.pondHarvests[cycleId]) || [];
     const hvKgSum = hvs2.reduce((sum,h)=>sum+(parseFloat(h.kg)||0), 0);
     const catchKgSum = (parseFloat(s.partial1)||0)+(parseFloat(s.partial2)||0)+(parseFloat(s.closed)||0);
     displayTotal = s.total ?? (hvKgSum>0 ? hvKgSum : (catchKgSum>0 ? catchKgSum : null));
@@ -3719,12 +3839,12 @@ function openPondSummaryModal(pondId){
   }
 
   if(isClosed || s.partial1 || s.partial2){
-      const harvests = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+      const harvests = (STATE.pondHarvests && STATE.pondHarvests[cycleId]) || [];
       const totalRev = harvests.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0) || (s.revenue||0);
       const revDisplay = totalRev > 0
         ? `<span style="font-size:18px;font-weight:800;color:var(--primary-dark);">${totalRev.toLocaleString('th-TH')} <span style="font-size:12px;font-weight:500;">บาท</span></span>`
         : `<span style="font-size:12px;color:var(--text-secondary);">ยังไม่ได้กรอก</span>`;
-      const ps2 = STATE.pondStatus[pondId] || {};
+      const ps2 = s;
       const sizeByIdx = [ps2.partial1Size, ps2.partial2Size, ps2.closedSize];
       const harvestSummaryRows = harvests.map((h,i)=>{
         const size = h.size || sizeByIdx[i];
@@ -3742,11 +3862,11 @@ function openPondSummaryModal(pondId){
           <span style="font-size:14px;font-weight:700;color:var(--primary-dark);">💰 รายได้รวม</span>
           <div style="display:flex;align-items:center;gap:10px;">
             ${revDisplay}
-            <button onclick="toggleHarvestForm('${pondId}')" style="background:rgba(255,255,255,0.7);border:1px solid #a7f3d0;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--primary-dark);line-height:1.4;">✏️</button>
+            <button onclick="toggleHarvestForm('${cycleId}')" style="background:rgba(255,255,255,0.7);border:1px solid #a7f3d0;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--primary-dark);line-height:1.4;">✏️</button>
           </div>
         </div>
         ${harvests.length > 0 ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #a7f3d0;">${harvestSummaryRows}</div>` : ''}
-        <div id="harvestForm_${pondId}" style="display:none;margin-top:12px;">
+        <div id="harvestForm_${cycleId}" style="display:none;margin-top:12px;">
           <div style="display:grid;grid-template-columns:70px 1fr 68px 1fr 1fr 26px;gap:4px;margin-bottom:6px;">
             <span style="font-size:11px;font-weight:600;color:var(--primary-dark);">ประเภท</span>
             <span style="font-size:11px;font-weight:600;color:var(--primary-dark);">น้ำหนัก (กก.)</span>
@@ -3755,30 +3875,30 @@ function openPondSummaryModal(pondId){
             <span style="font-size:11px;font-weight:600;color:var(--primary-dark);">รายได้</span>
             <span></span>
           </div>
-          <div id="harvestRows_${pondId}"></div>
-          <button onclick="addHarvestRow('${pondId}')" style="width:100%;background:none;border:1.5px dashed #a7f3d0;border-radius:8px;padding:7px;font-size:12px;cursor:pointer;color:var(--primary);margin:4px 0 8px;">+ เพิ่มรายการจับ</button>
+          <div id="harvestRows_${cycleId}"></div>
+          <button onclick="addHarvestRow('${cycleId}')" style="width:100%;background:none;border:1.5px dashed #a7f3d0;border-radius:8px;padding:7px;font-size:12px;cursor:pointer;color:var(--primary);margin:4px 0 8px;">+ เพิ่มรายการจับ</button>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1.5px solid #a7f3d0;">
             <span style="font-size:13px;font-weight:700;color:var(--primary-dark);">รวม</span>
-            <span id="harvestTotal_${pondId}" style="font-size:16px;font-weight:800;color:var(--primary-dark);">0 บาท</span>
+            <span id="harvestTotal_${cycleId}" style="font-size:16px;font-weight:800;color:var(--primary-dark);">0 บาท</span>
           </div>
-          <button onclick="saveHarvests('${pondId}')" style="width:100%;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px;">💾 บันทึก</button>
+          <button onclick="saveHarvests('${cycleId}')" style="width:100%;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px;">💾 บันทึก</button>
         </div>
       </div>`;
     }
 
     // ─── ต้นทุน ───
-    const costs2 = (STATE.pondCosts2 && STATE.pondCosts2[pondId]) || {};
-    const details = (STATE.pondCostDetails && STATE.pondCostDetails[pondId]) || [];
+    const costs2 = (STATE.pondCosts2 && STATE.pondCosts2[cycleId]) || {};
+    const details = (STATE.pondCostDetails && STATE.pondCostDetails[cycleId]) || [];
     if(s.status === 'closed'){
       const grandCost = COST_ITEMS.reduce((sum, it) => sum + (parseFloat(costs2[it.id]) || 0), 0)
         + (costs2._custom || []).reduce((sum, it) => sum + (parseFloat(it.amount) || 0), 0);
       // Use revenue from pondHarvests first; fall back to s.revenue
-      const _hvRev = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+      const _hvRev = (STATE.pondHarvests && STATE.pondHarvests[cycleId]) || [];
       const _totalRev = _hvRev.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0) || (parseFloat(s.revenue)||0);
       const profit = _totalRev > 0 ? _totalRev - grandCost : null;
       html += `<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px;">
         ${sectionHead('📋', 'สรุปต้นทุน', '#854f0b')}
-        <button onclick="closePondSummaryModal();openCostForPond('${pondId}')" style="flex-shrink:0;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px;">✏️ แก้ไขต้นทุน</button>
+        <button onclick="closePondSummaryModal();openCostForPond('${pondId}','${cycleId}')" style="flex-shrink:0;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px;">✏️ แก้ไขต้นทุน</button>
       </div>`;
       html += `<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:10px;">`;
       COST_ITEMS.forEach(it => {
@@ -3786,7 +3906,7 @@ function openPondSummaryModal(pondId){
         if(val === 0) return;
         const canExpand = (it.id === 'feed' || it.id === 'chemical');
         const detailItems = details.filter(d => d.category === it.id);
-        const expandId = `costDetail_${pondId}_${it.id}`;
+        const expandId = `costDetail_${cycleId}_${it.id}`;
         html += `<div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#fff;">
           <div style="display:flex;justify-content:space-between;align-items:center;${canExpand ? 'cursor:pointer;' : ''}"
             ${canExpand ? `onclick="var el=document.getElementById('${expandId}');el.style.display=el.style.display==='none'?'block':'none'"` : ''}>
@@ -3804,7 +3924,7 @@ function openPondSummaryModal(pondId){
                 </div>`).join('')}
               </div>`
             : `<div id="${expandId}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);text-align:center;">
-                <button onclick="closePondSummaryModal();openCostForPond('${pondId}')" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">+ ใส่รายละเอียด</button>
+                <button onclick="closePondSummaryModal();openCostForPond('${pondId}','${cycleId}')" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">+ ใส่รายละเอียด</button>
               </div>`)
             : ''}
         </div>`;
@@ -3872,11 +3992,12 @@ function openPondSummaryModal(pondId){
 
   document.getElementById('pondSummaryContent').innerHTML = html;
   document.getElementById('pondSummaryModal').style.display = 'flex';
-  renderCostModalPieChart(pondId);
+  renderCostModalPieChart(cycleId);
 }
 
-function openPondSummaryEditMode(pondId){
-  const s = STATE.pondStatus[pondId] || {};
+function openPondSummaryEditMode(pondId, cycleId){
+  cycleId = cycleId || (getCurrentCycle(pondId)||{}).cycleId;
+  const s = (getCycleById(cycleId)||{}).cycle || {};
   const isClosed = s.status === 'closed';
 
   function field(label, id, value, type='text', step=''){
@@ -3932,7 +4053,7 @@ function openPondSummaryEditMode(pondId){
     html += `</div>`;
 
     // Pull harvest kg/size from pondHarvests when pondStatus fields are null
-    const _hvEdit = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+    const _hvEdit = (STATE.pondHarvests && STATE.pondHarvests[cycleId]) || [];
     const _hvPart = _hvEdit.filter(h => h.type !== 'close');
     const _hvClose = _hvEdit.find(h => h.type === 'close');
     html += secHead('🦐', 'การจับ', '#854f0b');
@@ -3946,7 +4067,7 @@ function openPondSummaryEditMode(pondId){
     html += `</div>`;
 
     // Auto-compute summary values from raw data for pre-filling
-    const _hvs3 = (STATE.pondHarvests && STATE.pondHarvests[pondId]) || [];
+    const _hvs3 = (STATE.pondHarvests && STATE.pondHarvests[cycleId]) || [];
     const _hvKg3 = _hvs3.reduce((sum,h)=>sum+(parseFloat(h.kg)||0), 0);
     const _catchKg3 = (parseFloat(s.partial1)||0)+(parseFloat(s.partial2)||0)+(parseFloat(s.closed)||0);
     const _pd3 = STATE.ponds.find(p=>p.id===pondId);
@@ -3955,7 +4076,7 @@ function openPondSummaryEditMode(pondId){
     const _autoDOC3 = s.doc??(s.releaseDate&&s.closeDate
       ?Math.round((new Date(s.closeDate+' 00:00:00')-new Date(s.releaseDate+' 00:00:00'))/86400000):null);
     const _autoYield3 = s.yield??(_autoTotal3&&_area3?parseFloat((_autoTotal3/_area3).toFixed(1)):null);
-    const _lgr3 = (STATE.growthRecords||[]).filter(r=>r.pondId===pondId&&r.mbw).sort((a,b)=>a.date<b.date?1:-1)[0];
+    const _lgr3 = (STATE.growthRecords||[]).filter(r=>r.pondId===pondId&&r.mbw&&(!s.releaseDate||r.date>=s.releaseDate)&&(!s.closeDate||r.date<=s.closeDate)).sort((a,b)=>a.date<b.date?1:-1)[0];
     const _laf3 = _lgr3&&_lgr3.accFeed?parseFloat(_lgr3.accFeed):null;
     const _autoFCR3 = s.fcr??(_laf3&&_autoTotal3?parseFloat((_laf3/_autoTotal3).toFixed(2)):null);
     const _autoAccF3 = s.accF??(_laf3||null);
@@ -3986,8 +4107,8 @@ function openPondSummaryEditMode(pondId){
   }
 
   html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px;">
-    <button onclick="openPondSummaryModal('${pondId}')" style="padding:12px;border:1.5px solid var(--border);background:#fff;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;color:var(--text-secondary);">ยกเลิก</button>
-    <button onclick="savePondSummaryEdit('${pondId}')" style="padding:12px;border:none;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">💾 บันทึก</button>
+    <button onclick="openPondSummaryModal('${pondId}','${cycleId}')" style="padding:12px;border:1.5px solid var(--border);background:#fff;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;color:var(--text-secondary);">ยกเลิก</button>
+    <button onclick="savePondSummaryEdit('${pondId}','${cycleId}')" style="padding:12px;border:none;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">💾 บันทึก</button>
   </div>
   </div>`;
 
@@ -3995,8 +4116,10 @@ function openPondSummaryEditMode(pondId){
   document.getElementById('pondSummaryModal').style.display = 'flex';
 }
 
-function savePondSummaryEdit(pondId){
-  const s = STATE.pondStatus[pondId] || {};
+function savePondSummaryEdit(pondId, cycleId){
+  const found = getCycleById(cycleId);
+  if(!found) return;
+  const s = found.cycle;
   const isClosed = s.status === 'closed';
   function getNum(id){ const el=document.getElementById('pse_'+id); return el && el.value!=='' ? parseFloat(el.value) : null; }
   function getStr(id){ const el=document.getElementById('pse_'+id); return el ? el.value.trim() : null; }
@@ -4040,16 +4163,16 @@ function savePondSummaryEdit(pondId){
     s.note = noteEl ? noteEl.value : null;
   }
 
-  STATE.pondStatus[pondId] = s;
   logActivity('แก้ไขข้อมูลสรุป', 'บ่อ ' + pondId);
   saveState();
   renderSummaryTab();
   showToast('บันทึกข้อมูลแล้ว');
-  openPondSummaryModal(pondId);
+  openPondSummaryModal(pondId, cycleId);
 }
 
-function openCostForPond(pondId){
+function openCostForPond(pondId, cycleId){
   costSelectedPond = pondId;
+  costSelectedCycleId = cycleId || (getCurrentCycle(pondId)||{}).cycleId || null;
   switchTab('cost');
   setTimeout(()=>{
     renderCostTab();
@@ -4070,31 +4193,31 @@ function setSummarySort(col){
 
 function showYearlyDetail(type){
   const year = new Date().getFullYear().toString();
-  const closedEntries = [];
-  STATE.ponds.forEach(p => {
-    const s = STATE.pondStatus[p.id];
-    if(!s || !s.releaseDate || !s.releaseDate.startsWith(year)) return;
-    if(s.status !== 'closed') return;
-    const c = (STATE.pondCosts2 && STATE.pondCosts2[p.id]) || {};
+  let closedEntries = [];
+  getYearCycles(year).filter(({cycle}) => cycle.status === 'closed').forEach(({pondId, cycle}) => {
+    const s = cycle;
+    const c = (STATE.pondCosts2 && STATE.pondCosts2[cycle.cycleId]) || {};
     const fixed = Object.keys(c).filter(k=>k!=='_custom'&&k!=='_labels').reduce((s,k)=>s+(parseFloat(c[k])||0),0);
     const custom = (c._custom||[]).reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
-    const _hvYD = (STATE.pondHarvests && STATE.pondHarvests[p.id]) || [];
+    const _hvYD = (STATE.pondHarvests && STATE.pondHarvests[cycle.cycleId]) || [];
     const _revYD = _hvYD.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0) || (parseFloat(s.revenue)||0);
     closedEntries.push({
-      pondId: p.id,
+      pondId: pondId,
+      cycleId: cycle.cycleId,
       revenue: _revYD,
       cost: fixed + custom,
       profit: _revYD - (fixed+custom)
     });
   });
+  closedEntries = labelCyclesByPond(closedEntries);
 
   const titles = {revenue:'💰 รายได้รวมปีนี้ — แยกตามบ่อ', cost:'📋 ต้นทุนรวมปีนี้ — แยกตามบ่อ', profit:'📊 กำไร/ขาดทุนปีนี้ — แยกตามบ่อ'};
   let rows = '';
   closedEntries.forEach(e => {
     const profitColor = e.profit >= 0 ? '#0f6e56' : '#dc2626';
     const profitSign  = e.profit >= 0 ? '+' : '-';
-    rows += `<tr style="cursor:pointer;" onclick="document.getElementById('yearlyDetailModal').style.display='none';openPondSummaryModal('${e.pondId}')">
-      <td style="font-weight:700;color:var(--primary);">บ่อ ${e.pondId}</td>
+    rows += `<tr style="cursor:pointer;" onclick="document.getElementById('yearlyDetailModal').style.display='none';openPondSummaryModal('${e.pondId}','${e.cycleId}')">
+      <td style="font-weight:700;color:var(--primary);">บ่อ ${e.pondId}${e.cycleLabel}</td>
       <td style="text-align:right;">${e.revenue > 0 ? e.revenue.toLocaleString('th-TH') : '-'}</td>
       <td style="text-align:right;">${e.cost > 0 ? e.cost.toLocaleString('th-TH') : '-'}</td>
       <td style="text-align:right;font-weight:700;color:${profitColor};">${(e.revenue>0||e.cost>0) ? profitSign+Math.abs(e.profit).toLocaleString('th-TH') : '-'}</td>
@@ -4138,13 +4261,11 @@ function showYearlyDetail(type){
 
 function renderSummaryTab(){
   const year = new Date().getFullYear().toString();
-  const entries = [];
-  STATE.ponds.forEach(p => {
-    const s = STATE.pondStatus[p.id];
-    if(!s || !s.releaseDate) return;
-    if(!s.releaseDate.startsWith(year)) return;
-    entries.push({ pondId: p.id, status: s });
+  let entries = [];
+  getYearCycles(year).forEach(({pondId, cycle}) => {
+    entries.push({ pondId, cycleId: cycle.cycleId, status: cycle });
   });
+  entries = labelCyclesByPond(entries); // adds （รอบ N） when a pond has >1 cycle this year
   const getVal = (e, col) => {
     const s = e.status;
     switch(col){
@@ -4173,19 +4294,19 @@ function renderSummaryTab(){
   const totalWeightKg = entries.reduce((sum, e) => sum + (e.status.stockWeight || 0), 0);
   const totalHarvestKg = entries.reduce((sum, e) => {
     if(e.status.status !== 'closed') return sum;
-    const _hvKg2 = ((STATE.pondHarvests && STATE.pondHarvests[e.pondId]) || []).reduce((s2,h)=>s2+(parseFloat(h.kg)||0),0);
+    const _hvKg2 = ((STATE.pondHarvests && STATE.pondHarvests[e.cycleId]) || []).reduce((s2,h)=>s2+(parseFloat(h.kg)||0),0);
     const _catchKg2 = (parseFloat(e.status.partial1)||0)+(parseFloat(e.status.partial2)||0)+(parseFloat(e.status.closed)||0);
     return sum + (parseFloat(e.status.total) || _hvKg2 || _catchKg2 || 0);
   }, 0);
 
   const closedEntries = entries.filter(e => e.status.status === 'closed');
   const totalRevenue = closedEntries.reduce((sum, e) => {
-    const _hvST = (STATE.pondHarvests && STATE.pondHarvests[e.pondId]) || [];
+    const _hvST = (STATE.pondHarvests && STATE.pondHarvests[e.cycleId]) || [];
     const _revST = _hvST.reduce((s2,h)=>s2+(parseFloat(h.revenue)||0),0) || (parseFloat(e.status.revenue)||0);
     return sum + _revST;
   }, 0);
   const totalCost = closedEntries.reduce((sum, e) => {
-    const c = (STATE.pondCosts2 && STATE.pondCosts2[e.pondId]) || {};
+    const c = (STATE.pondCosts2 && STATE.pondCosts2[e.cycleId]) || {};
     const fixed = Object.keys(c).filter(k=>k!=='_custom'&&k!=='_labels').reduce((s,k)=>s+(parseFloat(c[k])||0),0);
     const custom = (c._custom||[]).reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
     return sum + fixed + custom;
@@ -4349,9 +4470,9 @@ function renderSummaryTab(){
     const statusBadge = s.status === 'active'
       ? '<span class="badge green">กำลังเลี้ยง</span>'
       : '<span class="badge amber">ปิดบ่อแล้ว</span>';
-    html += `<tr style="cursor:pointer;" onclick="openPondSummaryModal('${e.pondId}')">
+    html += `<tr style="cursor:pointer;" onclick="openPondSummaryModal('${e.pondId}','${e.cycleId}')">
       <td>${i + 1}</td>
-      <td><strong style="color:var(--primary);text-decoration:underline;">บ่อ ${e.pondId}</strong></td>
+      <td><strong style="color:var(--primary);text-decoration:underline;">บ่อ ${e.pondId}${e.cycleLabel}</strong></td>
       <td>${formatDateShort(s.releaseDate)}</td>
       <td>${formatDateShort(s.closeDate)}</td>
       <td>${s.fromPond || s.shrimpType || '-'}</td>
@@ -4616,12 +4737,15 @@ const COST_CAT_COLORS = {
 };
 
 let costSelectedPond = null;
+let costSelectedCycleId = null;
 
 function renderCostTab(){
   const grid = document.getElementById('costPondGrid');
   grid.innerHTML = '';
   STATE.ponds.filter(p=>!p.id.startsWith('T')&&!p.id.startsWith('KC')).forEach(function(p){
-    const data = (STATE.pondCosts2 && STATE.pondCosts2[p.id]) || {};
+    const cyc = getCurrentCycle(p.id);
+    const cid = cyc ? cyc.cycleId : null;
+    const data = (STATE.pondCosts2 && cid && STATE.pondCosts2[cid]) || {};
     const total = COST_ITEMS.reduce(function(s,it){ return s + (parseFloat(data[it.id]) || 0); }, 0);
     const btn = document.createElement('button');
     btn.className = 'cost-pond-btn' + (costSelectedPond === p.id ? ' selected' : '');
@@ -4631,7 +4755,7 @@ function renderCostTab(){
       + '<div class="pond-info"><span>บ่อ ' + p.id + areaStr + '</span>'
       + '<small>' + totalStr + '</small></div>'
       + '<i class="ti ti-chevron-right" style="color:var(--brand);opacity:.6;"></i>';
-    btn.onclick = function(){ costSelectedPond = p.id; renderCostTab(); renderCostDetail(); setTimeout(()=>{ const el=document.getElementById('costDetailWrap'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },100); };
+    btn.onclick = function(){ costSelectedPond = p.id; costSelectedCycleId = cid; renderCostTab(); renderCostDetail(); setTimeout(()=>{ const el=document.getElementById('costDetailWrap'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); },100); };
     grid.appendChild(btn);
   });
 
@@ -4648,8 +4772,8 @@ function renderCostDetail(){
   if(!costSelectedPond) return;
   document.getElementById('costPondTitle').textContent = costSelectedPond;
 
-  const data = (STATE.pondCosts2 && STATE.pondCosts2[costSelectedPond]) || {};
-  const ps = STATE.pondStatus && STATE.pondStatus[costSelectedPond];
+  const data = (STATE.pondCosts2 && STATE.pondCosts2[costSelectedCycleId]) || {};
+  const ps = (getCycleById(costSelectedCycleId)||{}).cycle;
   const yieldKg = ps && ps.yield ? parseFloat(ps.yield) : null;
 
   const tbody = document.getElementById('costFixedBody');
@@ -4699,7 +4823,7 @@ function renderCostDetail(){
 }
 
 function calcCostTotal(){
-  const ps = STATE.pondStatus && STATE.pondStatus[costSelectedPond];
+  const ps = (getCycleById(costSelectedCycleId)||{}).cycle;
   const yieldKg = ps && ps.yield ? parseFloat(ps.yield) : null;
 
   let total = 0;
@@ -4741,7 +4865,7 @@ function addCustomRow(){
 }
 
 function saveCostForm(){
-  if(!costSelectedPond){ showToast('กรุณาเลือกบ่อก่อน'); return; }
+  if(!costSelectedPond || !costSelectedCycleId){ showToast('กรุณาเลือกบ่อก่อน'); return; }
   if(!STATE.pondCosts2) STATE.pondCosts2 = {};
   const data = {};
   const labels = {};
@@ -4762,7 +4886,7 @@ function saveCostForm(){
   });
   if(customItems.length > 0) data._custom = customItems; else delete data._custom;
 
-  STATE.pondCosts2[costSelectedPond] = data;
+  STATE.pondCosts2[costSelectedCycleId] = data;
   logActivity('บันทึกต้นทุน', 'บ่อ ' + costSelectedPond);
   saveState();
   renderCostTab();
@@ -4779,9 +4903,9 @@ let _editCostDetailIdx = -1;
 function renderCostDetailItems(){
   const el = document.getElementById('costItemsList');
   if(!el) return;
-  if(!costSelectedPond){ el.innerHTML = ''; return; }
+  if(!costSelectedPond || !costSelectedCycleId){ el.innerHTML = ''; return; }
 
-  const items = (STATE.pondCostDetails && STATE.pondCostDetails[costSelectedPond]) || [];
+  const items = (STATE.pondCostDetails && STATE.pondCostDetails[costSelectedCycleId]) || [];
   if(items.length === 0){
     el.innerHTML = '<p class="hint" style="text-align:center;padding:10px 0;">ยังไม่มีรายการสินค้า • กรอกแบบฟอร์มด้านล่างเพื่อเพิ่ม</p>';
     return;
@@ -4862,7 +4986,7 @@ function updateCdPreviewRow(){
 }
 
 function saveCostDetailEdit(idx){
-  const items = STATE.pondCostDetails && STATE.pondCostDetails[costSelectedPond];
+  const items = STATE.pondCostDetails && STATE.pondCostDetails[costSelectedCycleId];
   if(!items || !items[idx]) return;
   const priceEl = document.getElementById('cde_price');
   const qtyEl   = document.getElementById('cde_qty');
@@ -4895,7 +5019,7 @@ function calcCdPreview(){
 }
 
 function addCostDetailItem(){
-  if(!costSelectedPond){ showToast('กรุณาเลือกบ่อก่อน'); return; }
+  if(!costSelectedPond || !costSelectedCycleId){ showToast('กรุณาเลือกบ่อก่อน'); return; }
   const cat  = document.getElementById('cdCategory').value;
   const name = document.getElementById('cdName').value.trim();
   const priceUnit = parseFloat(document.getElementById('cdUnitPrice').value) || 0;
@@ -4911,8 +5035,8 @@ function addCostDetailItem(){
   };
 
   if(!STATE.pondCostDetails) STATE.pondCostDetails = {};
-  if(!STATE.pondCostDetails[costSelectedPond]) STATE.pondCostDetails[costSelectedPond] = [];
-  STATE.pondCostDetails[costSelectedPond].push(entry);
+  if(!STATE.pondCostDetails[costSelectedCycleId]) STATE.pondCostDetails[costSelectedCycleId] = [];
+  STATE.pondCostDetails[costSelectedCycleId].push(entry);
   saveState();
   renderCostDetailItems();
 
@@ -4926,11 +5050,11 @@ function addCostDetailItem(){
 }
 
 function removeCostDetailItem(idx){
-  if(!costSelectedPond) return;
-  if(!STATE.pondCostDetails || !STATE.pondCostDetails[costSelectedPond]) return;
-  const name = STATE.pondCostDetails[costSelectedPond][idx] ? STATE.pondCostDetails[costSelectedPond][idx].name : '';
+  if(!costSelectedPond || !costSelectedCycleId) return;
+  if(!STATE.pondCostDetails || !STATE.pondCostDetails[costSelectedCycleId]) return;
+  const name = STATE.pondCostDetails[costSelectedCycleId][idx] ? STATE.pondCostDetails[costSelectedCycleId][idx].name : '';
   showConfirm('ลบ "' + name + '" ออกจากรายการ?', function(){
-    STATE.pondCostDetails[costSelectedPond].splice(idx, 1);
+    STATE.pondCostDetails[costSelectedCycleId].splice(idx, 1);
     saveState();
     renderCostDetailItems();
     showToast('ลบ ' + name + ' แล้ว');
@@ -5434,7 +5558,7 @@ function showFeedChart(pondId){
     .sort((a,b)=>a.date<b.date?-1:1)
     .slice(-30);
   const hint = document.getElementById('feedChartHint');
-  const ps = STATE.pondStatus[pondId];
+  const ps = getCurrentCycle(pondId);
   const releaseDate = ps && ps.releaseDate ? ps.releaseDate : null;
   const growthForPond = (STATE.growthRecords || [])
     .filter(r => r.pondId === pondId && r.mbw)
@@ -5905,9 +6029,10 @@ function handleExcelImport(input){
           if(typeof pid!=='number'||!Number.isInteger(pid)||pid<1) return;
           if(typeof feedPop!=='number'||feedPop<10000) return; // skip age/small values from lower section
           const key = String(pid);
-          if(!STATE.pondStatus[key]) STATE.pondStatus[key]={};
-          STATE.pondStatus[key].weeklyFeedPop = feedPop;
-          STATE.pondStatus[key].weeklyFeedDate = today2;
+          const cyc = getCurrentCycle(key);
+          if(!cyc) return; // no stocking cycle recorded for this pond yet — nothing to attach the weekly figure to
+          cyc.weeklyFeedPop = feedPop;
+          cyc.weeklyFeedDate = today2;
           feedPopCount++;
         });
       }
@@ -5960,22 +6085,24 @@ async function exportSummaryExcel(){
   const fmtD=d=>{if(!d)return '-';const[y,m,dy]=d.split('-');return `${dy}/${m}/${parseInt(y)+543}`;};
   const n=v=>(v!=null&&v!=='')?parseFloat(v):null;
 
-  // ── Collect closed ponds ──
-  const entries=[];
-  STATE.ponds.forEach(p=>{
-    const s=STATE.pondStatus[p.id];
-    if(!s||!s.releaseDate||!s.releaseDate.startsWith(year)||s.status!=='closed') return;
-    const costs2=(STATE.pondCosts2&&STATE.pondCosts2[p.id])||{};
+  // ── Collect closed ponds (one row per cycle, not per pond) ──
+  let entries=[];
+  getYearCycles(year).filter(({cycle})=>cycle.status==='closed').forEach(({pondId,cycle})=>{
+    const p=STATE.ponds.find(pp=>pp.id===pondId);
+    if(!p) return;
+    const s=cycle;
+    const costs2=(STATE.pondCosts2&&STATE.pondCosts2[cycle.cycleId])||{};
     const totalCost=COST_ITEMS.reduce((sum,it)=>sum+(parseFloat(costs2[it.id])||0),0)
       +(costs2._custom||[]).reduce((sum,it)=>sum+(parseFloat(it.amount)||0),0);
-    const hvs=(STATE.pondHarvests&&STATE.pondHarvests[p.id])||[];
+    const hvs=(STATE.pondHarvests&&STATE.pondHarvests[cycle.cycleId])||[];
     const totalRev=hvs.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0)||(parseFloat(s.revenue)||0);
     let p1h={},p2h={},clh={};
     if(s.partial1&&s.partial2){p1h=hvs[0]||{};p2h=hvs[1]||{};clh=hvs[2]||hvs[hvs.length-1]||{};}
     else if(s.partial1){p1h=hvs[0]||{};clh=hvs[1]||{};}
     else{clh=hvs[0]||{};}
-    entries.push({pond:p,s,costs2,totalCost,totalRev,p1h,p2h,clh});
+    entries.push({pond:p,pondId,cycleId:cycle.cycleId,s,costs2,totalCost,totalRev,p1h,p2h,clh});
   });
+  entries=labelCyclesByPond(entries);
 
   if(!entries.length){showToast('ไม่มีบ่อที่ปิดแล้วในปีนี้');return;}
 
@@ -6052,7 +6179,7 @@ async function exportSummaryExcel(){
     ws0.getRow(row).height=20;
     const profit=e.totalRev-e.totalCost;
     const rd=[
-      {v:idx+1,a:'center'},{v:'บ่อ '+p.id,a:'center',bo:true,co:DG},
+      {v:idx+1,a:'center'},{v:'บ่อ '+p.id+e.cycleLabel,a:'center',bo:true,co:DG},
       {v:n(p.area),a:'center',f:'0.0'},
       {v:fmtD(s.releaseDate),a:'center'},{v:fmtD(s.closeDate),a:'center'},
       {v:n(s.doc),a:'center',f:'0'},
@@ -6096,16 +6223,21 @@ async function exportSummaryExcel(){
   //  SHEETS 2+: Per-pond detail
   // ═══════════════════════════════════════════════════════════
   entries.forEach(entry=>{
-    const {pond,s,costs2,totalCost,totalRev,p1h,p2h,clh}=entry;
+    const {pond,cycleId,s,costs2,totalCost,totalRev,p1h,p2h,clh,cycleIndex}=entry;
     const pid=pond.id;
-    const details=(STATE.pondCostDetails&&STATE.pondCostDetails[pid])||[];
+    const details=(STATE.pondCostDetails&&STATE.pondCostDetails[cycleId])||[];
     const chems=details.filter(d=>d.category==='chemical');
     const feeds=details.filter(d=>d.category==='feed');
-    const grecs=(STATE.growthRecords||[]).filter(r=>r.pondId===pid).sort((a,b)=>a.date<b.date?-1:1);
+    const grecs=(STATE.growthRecords||[]).filter(r=>r.pondId===pid
+      &&(!s.releaseDate||r.date>=s.releaseDate)&&(!s.closeDate||r.date<=s.closeDate)
+    ).sort((a,b)=>a.date<b.date?-1:1);
     const profit=totalRev-totalCost;
     const cpkg=totalCost>0&&n(s.total)>0?Math.round(totalCost/(n(s.total)||1)):null;
 
-    const ws=wb.addWorksheet('บ่อ '+pid);
+    // Sheet names are capped at 31 chars and must be unique — append a short cycle suffix
+    // (e.g. " รอบ2") only when this pond has more than one closed cycle this year.
+    const wsName=('บ่อ '+pid+(cycleIndex>1?' รอบ'+cycleIndex:'')).slice(0,31);
+    const ws=wb.addWorksheet(wsName);
     ws.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0};
 
     // Column widths: A-E=items, F=gap, G-J=growth, K=gap, L-N=costs/harvest
@@ -6118,7 +6250,7 @@ async function exportSummaryExcel(){
     ws.getRow(1).height=38;
 
     ws.mergeCells(2,1,2,5);
-    ws.getCell(2,1).value=`สรุปผลการเลี้ยง บ่อ ${pid}  |  ปี ${beYear}`;
+    ws.getCell(2,1).value=`สรุปผลการเลี้ยง บ่อ ${pid}${cycleIndex>1?' (รอบ '+cycleIndex+')':''}  |  ปี ${beYear}`;
     ST(ws.getCell(2,1),{bold:true,size:13,color:MG,bg:LG,align:'center'});
     ws.mergeCells(2,7,2,10);
     ws.getCell(2,7).value='ตารางอัตราการเติบโต';
