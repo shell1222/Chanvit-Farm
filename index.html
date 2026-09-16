@@ -4531,7 +4531,7 @@ function renderSummaryTab(){
       : '<span class="badge amber">ปิดบ่อแล้ว</span>';
     html += `<tr style="cursor:pointer;" onclick="openPondSummaryModal('${e.pondId}','${e.cycleId}')">
       <td>${i + 1}</td>
-      <td><strong style="color:var(--primary);text-decoration:underline;">บ่อ ${e.pondId}${e.cycleLabel}</strong></td>
+      <td><strong style="color:var(--primary);text-decoration:underline;">บ่อ ${e.pondId}</strong></td>
       <td>${formatDateShort(s.releaseDate)}</td>
       <td>${formatDateShort(s.closeDate)}</td>
       <td>${s.fromPond || s.shrimpType || '-'}</td>
