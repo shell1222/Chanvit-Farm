@@ -1078,7 +1078,10 @@
   <!-- ============ TAB: SUMMARY ============ -->
   <div class="tab-content" id="tab-summary" style="display:none;">
     <div class="card">
-      <h2>📊 สรุปผลการเลี้ยงกุ้งปีนี้</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <h2 style="margin:0;">📊 สรุปผลการเลี้ยงกุ้ง ปี <span id="summaryYearTitle"></span></h2>
+        <select id="summaryYearSelect" onchange="changeSummaryYear(this.value)" style="border:1.5px solid var(--border);border-radius:10px;padding:6px 10px;font-size:13px;font-family:inherit;background:#fff;"></select>
+      </div>
       <div class="stat-grid" id="summaryStats" style="margin-bottom:16px;"></div>
       <h2 style="font-size:14px;font-weight:700;color:var(--text-secondary);margin-bottom:10px;">แหล่งลูกกุ้ง (Hatchery)</h2>
       <canvas id="hatcheryChart" style="max-height:220px;"></canvas>
@@ -1087,7 +1090,7 @@
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <h2 style="margin:0;">รายการบ่อที่ลงกุ้งปีนี้</h2>
+        <h2 style="margin:0;">รายการบ่อที่ลงกุ้ง ปี <span id="summaryYearTitle2"></span></h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button onclick="exportSummaryHTML()" style="display:flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(24,95,165,.25);">
             🌐 Export หน้าเว็บ
@@ -4278,8 +4281,30 @@ function setSummarySort(col){
   renderSummaryTab();
 }
 
+let summaryYear = new Date().getFullYear();
+function getAvailableSummaryYears(){
+  const years = new Set([new Date().getFullYear()]);
+  Object.keys(STATE.pondCycles||{}).forEach(pondId=>{
+    (STATE.pondCycles[pondId]||[]).forEach(cycle=>{
+      if(cycle.releaseDate) years.add(parseInt(cycle.releaseDate.slice(0,4),10));
+    });
+  });
+  return Array.from(years).sort((a,b)=>b-a);
+}
+function populateSummaryYearSelect(){
+  const sel = document.getElementById('summaryYearSelect');
+  if(!sel) return;
+  const years = getAvailableSummaryYears();
+  sel.innerHTML = years.map(y=>`<option value="${y}">ปี ${y+543}</option>`).join('');
+  sel.value = summaryYear;
+}
+function changeSummaryYear(y){
+  summaryYear = parseInt(y,10);
+  renderSummaryTab();
+}
+
 function showYearlyDetail(type){
-  const year = new Date().getFullYear().toString();
+  const year = summaryYear.toString();
   let closedEntries = [];
   getYearCycles(year).filter(({cycle}) => cycle.status === 'closed').forEach(({pondId, cycle}) => {
     const s = cycle;
@@ -4347,14 +4372,19 @@ function showYearlyDetail(type){
 }
 
 function renderSummaryTab(){
-  const year = new Date().getFullYear().toString();
+  populateSummaryYearSelect();
+  const year = summaryYear.toString();
+  const isCurrentYear = summaryYear === new Date().getFullYear();
+  document.getElementById('summaryYearTitle').textContent = summaryYear + 543;
+  document.getElementById('summaryYearTitle2').textContent = summaryYear + 543;
   let entries = [];
   // Walk each pond's cycles in stored (chronological) order so （รอบ N） labeling below comes
-  // out correctly, including cycles with no releaseDate (can't be filed under a year, but
-  // shown anyway so they stay reachable/editable — e.g. to fill in the date later).
+  // out correctly. Cycles with no releaseDate can't be filed under a specific year, so they're
+  // only shown under the current year (to stay reachable/editable) — not repeated under every
+  // past year too.
   STATE.ponds.forEach(p => {
     getPondCycles(p.id).forEach(cycle => {
-      if((cycle.releaseDate && cycle.releaseDate.startsWith(year)) || !cycle.releaseDate){
+      if((cycle.releaseDate && cycle.releaseDate.startsWith(year)) || (!cycle.releaseDate && isCurrentYear)){
         entries.push({ pondId: p.id, cycleId: cycle.cycleId, status: cycle });
       }
     });
@@ -6375,8 +6405,8 @@ async function exportSummaryExcel(){
   }
   showToast('กำลังสร้างไฟล์...');
 
-  const year=new Date().getFullYear().toString();
-  const beYear=(new Date().getFullYear()+543).toString();
+  const year=summaryYear.toString();
+  const beYear=(summaryYear+543).toString();
   const fmtD=d=>{if(!d)return '-';const[y,m,dy]=d.split('-');return `${dy}/${m}/${parseInt(y)+543}`;};
   const n=v=>(v!=null&&v!=='')?parseFloat(v):null;
 
@@ -6399,7 +6429,7 @@ async function exportSummaryExcel(){
   });
   entries=labelCyclesByPond(entries);
 
-  if(!entries.length){showToast('ไม่มีบ่อที่ปิดแล้วในปีนี้');return;}
+  if(!entries.length){showToast(`ไม่มีบ่อที่ปิดแล้วในปี ${beYear}`);return;}
 
   const wb=new ExcelJS.Workbook();
   wb.creator='ชาญวิทย์ฟาร์ม'; wb.created=new Date();
@@ -6803,8 +6833,8 @@ async function exportSummaryExcel(){
 async function exportSummaryHTML(){
   showToast('กำลังสร้างไฟล์...');
 
-  const year=new Date().getFullYear().toString();
-  const beYear=(new Date().getFullYear()+543).toString();
+  const year=summaryYear.toString();
+  const beYear=(summaryYear+543).toString();
   const n=v=>(v!=null&&v!=='')?parseFloat(v):null;
 
   let entries=[];
@@ -6846,7 +6876,7 @@ async function exportSummaryHTML(){
   });
   entries=labelCyclesByPond(entries);
 
-  if(!entries.length){showToast('ไม่มีข้อมูลบ่อในปีนี้');return;}
+  if(!entries.length){showToast(`ไม่มีข้อมูลบ่อในปี ${beYear}`);return;}
 
   const dataJson = JSON.stringify({meta:{beYear,year},entries}).replace(/</g,'\\u003c');
 
