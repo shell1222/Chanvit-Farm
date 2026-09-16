@@ -6407,7 +6407,7 @@ async function exportSummaryExcel(){
   // ═══════════════════════════════════════════════════════════
   const ws0=wb.addWorksheet('สรุปภาพรวม');
   ws0.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1};
-  const NC=22;
+  const NC=23;
   // Title
   ws0.mergeCells(1,1,1,NC);
   ws0.getCell(1,1).value='ชาญวิทย์ฟาร์ม — สรุปผลการเลี้ยงกุ้ง ปี '+beYear;
@@ -6448,7 +6448,7 @@ async function exportSummaryExcel(){
     {l:'P2(กก.)',w:10},{l:'P2 Size',w:9},{l:'P2 รายได้(฿)',w:13},
     {l:'ปิดบ่อ(กก.)',w:12},{l:'ปิด Size',w:9},{l:'ปิด รายได้(฿)',w:14},
     {l:'รวม(กก.)',w:12},{l:'Yield(/ไร่)',w:11},{l:'FCR',w:8},
-    {l:'ต้นทุน(฿)',w:14},{l:'กำไร/ขาดทุน(฿)',w:16},
+    {l:'ต้นทุน(฿)',w:14},{l:'กำไร/ขาดทุน(฿)',w:16},{l:'ผู้ดูแลบ่อ',w:14},
   ];
   ws0.getRow(OHR).height=36;
   oc.forEach((c,i)=>{ws0.getColumn(i+1).width=c.w;const cell=ws0.getCell(OHR,i+1);cell.value=c.l;ST(cell,{bold:true,size:10,color:'FFFFFF',bg:DG,align:'center',wrap:true,border:'thick'});});
@@ -6473,6 +6473,7 @@ async function exportSummaryExcel(){
       {v:n(s.fcr),a:'center',f:'0.000'},
       {v:e.totalCost||null,a:'right',f:'#,##0'},
       {v:profit,a:'right',f:'#,##0',bo:true,co:profit>=0?DG:RD},
+      {v:p.caretaker||'-',a:'center'},
     ];
     rd.forEach((d,ci)=>{const cell=ws0.getCell(row,ci+1);cell.value=d.v;ST(cell,{bg,align:d.a,fmt:d.f,bold:d.bo,color:d.co,border:'thin'});});
   });
@@ -6487,7 +6488,7 @@ async function exportSummaryExcel(){
     sumF('population'),sumF('partial1'),null,entries.reduce((s,e)=>s+(n(e.p1h.revenue)||0),0)||null,
     sumF('partial2'),null,entries.reduce((s,e)=>s+(n(e.p2h.revenue)||0),0)||null,
     null,null,entries.reduce((s,e)=>s+(n(e.clh.revenue)||0),0)||null,
-    totalHvAll||null,null,null,totalCtAll||null,netP,
+    totalHvAll||null,null,null,totalCtAll||null,netP,null,
   ].forEach((v,ci)=>{
     if(ci<7)return;
     const cell=ws0.getCell(oTR,ci+1);cell.value=v;
@@ -6638,6 +6639,7 @@ async function exportSummaryExcel(){
     CR++;
     const pondInfo=[
       ['บ่อ',pid],
+      ['ผู้ดูแลบ่อ',pond.caretaker||'-'],
       ['พื้นที่บ่อ (ไร่)',n(pond.area),'0.0'],
       ['วันปล่อยกุ้ง',fmtD(s.releaseDate)],
       ['จำนวนลูกกุ้งที่ปล่อย (ตัว)',n(s.population),'#,##0'],
