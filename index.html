@@ -4302,6 +4302,16 @@ function changeSummaryYear(y){
   summaryYear = parseInt(y,10);
   renderSummaryTab();
 }
+// Re-render the summary charts on resize/rotate so they can switch between the
+// horizontal (mobile) and vertical (desktop) bar layout as the width crosses 600px.
+let _summaryResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_summaryResizeTimer);
+  _summaryResizeTimer = setTimeout(() => {
+    const tab = document.getElementById('tab-summary');
+    if(tab && tab.style.display !== 'none') renderSummaryTab();
+  }, 250);
+});
 
 function showYearlyDetail(type){
   const year = summaryYear.toString();
@@ -4524,54 +4534,57 @@ function renderSummaryTab(){
       </div>`;
   }
 
+  // ─── Bar charts: horizontal on narrow screens so labels get a full row each
+  // instead of being squeezed/rotated under skinny bars (was still overlapping
+  // on real phones even after rotating the labels). ───
+  const colors = ['#0f6e56','#185fa5','#e8632a','#854f0b','#5b21b6','#0e7490','#a32d2d','#065f46'];
+  function renderCountBarChart(canvasId, refKey, labels, data){
+    if(window[refKey]) window[refKey].destroy();
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    const horizontal = window.innerWidth < 600;
+    const countAxis = {
+      beginAtZero: true,
+      ticks: { stepSize: 1, font: { size: 12 } },
+      grid: { color: '#f0f0f0' }
+    };
+    const labelAxis = {
+      ticks: horizontal
+        ? { font: { size: 12, weight: '600' }, autoSkip: false }
+        : { font: { size: 11, weight: '600' }, maxRotation: 60, minRotation: labels.length > 3 ? 60 : 0, autoSkip: false },
+      grid: { display: false }
+    };
+    window[refKey] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors.slice(0, labels.length),
+          borderRadius: 8,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: horizontal ? 'y' : 'x',
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.raw} บ่อ` } }
+        },
+        scales: horizontal
+          ? { x: countAxis, y: labelAxis }
+          : { y: countAxis, x: labelAxis }
+      }
+    });
+  }
+
   // ─── Hatchery chart ───
   const hatcheryCount = {};
   entries.forEach(e => {
     const h = (e.status.hatchery || 'ไม่ระบุ').trim();
     hatcheryCount[h] = (hatcheryCount[h] || 0) + 1;
   });
-  const labels = Object.keys(hatcheryCount);
-  const data   = labels.map(l => hatcheryCount[l]);
-  const colors = ['#0f6e56','#185fa5','#e8632a','#854f0b','#5b21b6','#0e7490','#a32d2d','#065f46'];
-
-  if(window._hatcheryChart) window._hatcheryChart.destroy();
-  const ctx = document.getElementById('hatcheryChart').getContext('2d');
-  window._hatcheryChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data,
-        backgroundColor: colors.slice(0, labels.length),
-        borderRadius: 8,
-        borderSkipped: false,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: { label: ctx => ` ${ctx.raw} บ่อ` }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: { stepSize: 1, font: { size: 12 } },
-          grid: { color: '#f0f0f0' }
-        },
-        x: {
-          ticks: {
-            font: { size: 11, weight: '600' },
-            maxRotation: 60, minRotation: labels.length > 3 ? 60 : 0,
-            autoSkip: false
-          },
-          grid: { display: false }
-        }
-      }
-    }
-  });
+  renderCountBarChart('hatcheryChart', '_hatcheryChart', Object.keys(hatcheryCount), Object.values(hatcheryCount));
 
   // ─── Caretaker chart ───
   const caretakerCount = {};
@@ -4580,45 +4593,7 @@ function renderSummaryTab(){
     const c = (pondData && pondData.caretaker ? pondData.caretaker.trim() : '') || 'ไม่ระบุ';
     caretakerCount[c] = (caretakerCount[c] || 0) + 1;
   });
-  const cLabels = Object.keys(caretakerCount);
-  const cData   = cLabels.map(l => caretakerCount[l]);
-
-  if(window._caretakerChart) window._caretakerChart.destroy();
-  const cCtx = document.getElementById('caretakerChart').getContext('2d');
-  window._caretakerChart = new Chart(cCtx, {
-    type: 'bar',
-    data: {
-      labels: cLabels,
-      datasets: [{
-        data: cData,
-        backgroundColor: colors.slice(0, cLabels.length),
-        borderRadius: 8,
-        borderSkipped: false,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.raw} บ่อ` } }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: { stepSize: 1, font: { size: 12 } },
-          grid: { color: '#f0f0f0' }
-        },
-        x: {
-          ticks: {
-            font: { size: 11, weight: '600' },
-            maxRotation: 60, minRotation: cLabels.length > 3 ? 60 : 0,
-            autoSkip: false
-          },
-          grid: { display: false }
-        }
-      }
-    }
-  });
+  renderCountBarChart('caretakerChart', '_caretakerChart', Object.keys(caretakerCount), Object.values(caretakerCount));
 
   const tableEl = document.getElementById('summaryTable');
   if(entries.length === 0){
