@@ -1654,6 +1654,18 @@ async function saveState(){
       const stGrowth = new Set(payload.growthRecords.map(r=>`${r.date}|${r.pondId}`));
       const extraGrowth = (cd.growthRecords||[]).filter(r=>r.date && r.pondId && !stGrowth.has(`${r.date}|${r.pondId}`));
       if(extraGrowth.length) payload.growthRecords = [...payload.growthRecords, ...extraGrowth];
+      // merge ponds: keep a pond's caretaker from the cloud copy if this client's local
+      // STATE.ponds was loaded before that field was set (e.g. an older open tab) — otherwise
+      // saving from that stale tab would silently wipe every pond's caretaker.
+      if(cd.ponds && cd.ponds.length){
+        const cdPondById = {};
+        cd.ponds.forEach(p=>{ cdPondById[p.id] = p; });
+        payload.ponds = payload.ponds.map(p=>{
+          const cp = cdPondById[p.id];
+          if(cp && p.caretaker == null && cp.caretaker != null) return { ...p, caretaker: cp.caretaker };
+          return p;
+        });
+      }
     }
     const payloadJson = JSON.stringify(payload);
     const payloadKB = (new TextEncoder().encode(payloadJson).length / 1024).toFixed(1);
