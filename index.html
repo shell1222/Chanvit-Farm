@@ -722,6 +722,10 @@
     <div class="card" id="pondDetailCard" style="display:none;">
       <h2><i class="ti ti-info-circle"></i> รายละเอียดบ่อ <span id="pondDetailTitle"></span></h2>
       <div class="field">
+        <label>ผู้ดูแลบ่อ</label>
+        <input type="text" id="pondCaretaker" placeholder="ชื่อผู้ดูแลบ่อ" onchange="savePondCaretaker()">
+      </div>
+      <div class="field">
         <label>สถานะ</label>
         <div class="pill-toggle" id="pondStatusToggle">
           <button id="pondStatusToggleActiveBtn" onclick="setPondStatus('active')">กำลังเลี้ยง</button>
@@ -1078,6 +1082,8 @@
       <div class="stat-grid" id="summaryStats" style="margin-bottom:16px;"></div>
       <h2 style="font-size:14px;font-weight:700;color:var(--text-secondary);margin-bottom:10px;">แหล่งลูกกุ้ง (Hatchery)</h2>
       <canvas id="hatcheryChart" style="max-height:220px;"></canvas>
+      <h2 style="font-size:14px;font-weight:700;color:var(--text-secondary);margin:20px 0 10px;">ผู้ดูแลบ่อ</h2>
+      <canvas id="caretakerChart" style="max-height:220px;"></canvas>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -2810,6 +2816,9 @@ function openPondDetail(pondId){
   document.getElementById('pondDetailCard').style.display = 'block';
   document.getElementById('pondDetailTitle').textContent = pondId;
 
+  const pondInfoData = STATE.ponds.find(p => p.id === pondId);
+  document.getElementById('pondCaretaker').value = (pondInfoData && pondInfoData.caretaker) || '';
+
   document.querySelectorAll('#pondStatusToggle button').forEach((b,i)=>{
     b.classList.toggle('active', (i===0 && status.status==='active') || (i===1 && status.status==='closed'));
   });
@@ -2874,6 +2883,15 @@ function openPondDetail(pondId){
   }
 
   document.getElementById('pondDetailCard').scrollIntoView({behavior:'smooth'});
+}
+
+function savePondCaretaker(){
+  if(!selectedPondId) return;
+  const pondData = STATE.ponds.find(p => p.id === selectedPondId);
+  if(!pondData) return;
+  pondData.caretaker = document.getElementById('pondCaretaker').value.trim();
+  logActivity('แก้ไขผู้ดูแลบ่อ', 'บ่อ ' + selectedPondId + (pondData.caretaker ? ' → ' + pondData.caretaker : ''));
+  saveState();
 }
 
 function setPondStatus(status){
@@ -4489,6 +4507,46 @@ function renderSummaryTab(){
         tooltip: {
           callbacks: { label: ctx => ` ${ctx.raw} บ่อ` }
         }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { stepSize: 1, font: { size: 12 } },
+          grid: { color: '#f0f0f0' }
+        },
+        x: { ticks: { font: { size: 13, weight: '600' } }, grid: { display: false } }
+      }
+    }
+  });
+
+  // ─── Caretaker chart ───
+  const caretakerCount = {};
+  entries.forEach(e => {
+    const pondData = STATE.ponds.find(p => p.id === e.pondId);
+    const c = (pondData && pondData.caretaker ? pondData.caretaker.trim() : '') || 'ไม่ระบุ';
+    caretakerCount[c] = (caretakerCount[c] || 0) + 1;
+  });
+  const cLabels = Object.keys(caretakerCount);
+  const cData   = cLabels.map(l => caretakerCount[l]);
+
+  if(window._caretakerChart) window._caretakerChart.destroy();
+  const cCtx = document.getElementById('caretakerChart').getContext('2d');
+  window._caretakerChart = new Chart(cCtx, {
+    type: 'bar',
+    data: {
+      labels: cLabels,
+      datasets: [{
+        data: cData,
+        backgroundColor: colors.slice(0, cLabels.length),
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.raw} บ่อ` } }
       },
       scales: {
         y: {
