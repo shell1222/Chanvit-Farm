@@ -1088,9 +1088,14 @@
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <h2 style="margin:0;">รายการบ่อที่ลงกุ้งปีนี้</h2>
-        <button onclick="exportSummaryExcel()" style="display:flex;align-items:center;gap:6px;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(15,110,86,.25);">
-          📥 Export Excel
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button onclick="exportSummaryHTML()" style="display:flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(24,95,165,.25);">
+            🌐 Export หน้าเว็บ
+          </button>
+          <button onclick="exportSummaryExcel()" style="display:flex;align-items:center;gap:6px;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(15,110,86,.25);">
+            📥 Export Excel
+          </button>
+        </div>
       </div>
       <div class="table-wrap" id="summaryTable"></div>
     </div>
@@ -6775,6 +6780,461 @@ async function exportSummaryExcel(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast(`✅ Export เรียบร้อย — ภาพรวม + ${entries.length} แท็บบ่อ`);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Export ปีนี้ as a standalone interactive HTML report —
+//  same look, sortable table, and click-to-see-full-detail
+//  behaviour as the live summary tab, but frozen into one
+//  offline .html file (no Firestore/login needed to view it).
+// ═══════════════════════════════════════════════════════════
+async function exportSummaryHTML(){
+  showToast('กำลังสร้างไฟล์...');
+
+  const year=new Date().getFullYear().toString();
+  const beYear=(new Date().getFullYear()+543).toString();
+  const n=v=>(v!=null&&v!=='')?parseFloat(v):null;
+
+  let entries=[];
+  getYearCycles(year).forEach(({pondId,cycle})=>{
+    const p=STATE.ponds.find(pp=>pp.id===pondId);
+    if(!p) return;
+    const s=cycle;
+    const costs2=(STATE.pondCosts2&&STATE.pondCosts2[cycle.cycleId])||{};
+    const details=(STATE.pondCostDetails&&STATE.pondCostDetails[cycle.cycleId])||[];
+    const totalCost=COST_ITEMS.reduce((sum,it)=>sum+(parseFloat(costs2[it.id])||0),0)
+      +(costs2._custom||[]).reduce((sum,it)=>sum+(parseFloat(it.amount)||0),0);
+    const hvs=(STATE.pondHarvests&&STATE.pondHarvests[cycle.cycleId])||[];
+    const totalRev=hvs.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0)||(parseFloat(s.revenue)||0);
+    const grecs=(STATE.growthRecords||[]).filter(r=>r.pondId===pondId
+      &&(!s.releaseDate||r.date>=s.releaseDate)&&(!s.closeDate||r.date<=s.closeDate)
+    ).sort((a,b)=>a.date<b.date?-1:1);
+    entries.push({
+      pondId, area:n(p.area), caretaker:p.caretaker||null, cycleId:cycle.cycleId,
+      status:s.status||'active', releaseDate:s.releaseDate||null, closeDate:s.closeDate||null,
+      doc:n(s.doc), hatchery:s.hatchery||null, type:s.fromPond||s.shrimpType||null,
+      population:n(s.population), stockWeight:n(s.stockWeight), stockAge:n(s.stockAge),
+      stressTest:s.stressTest||null, sal:n(s.sal), density:n(s.density), mbw:n(s.mbw),
+      partial1:n(s.partial1), partial1Size:n(s.partial1Size),
+      partial2:n(s.partial2), partial2Size:n(s.partial2Size),
+      closed:n(s.closed), closedSize:n(s.closedSize),
+      total:n(s.total), yield:n(s.yield), fcr:n(s.fcr), adg:n(s.adg),
+      mbwFinal:n(s.mbwFinal), avgSize:n(s.avgSize), srOrder:n(s.srOrder), srBonus:n(s.srBonus),
+      customer:s.customer||null, note:s.note||null,
+      totalCost, totalRev,
+      costItems: COST_ITEMS.map(it=>({id:it.id,label:it.label,amount:parseFloat(costs2[it.id])||0})).filter(x=>x.amount>0),
+      customCosts: (costs2._custom||[]).filter(it=>parseFloat(it.amount)>0).map(it=>({name:it.name||'อื่นๆ',amount:parseFloat(it.amount)||0})),
+      costDetails: {
+        chemical: details.filter(d=>d.category==='chemical').map(d=>({name:d.name,qty:d.qty,unit:d.unit,total:n(d.total)})),
+        feed: details.filter(d=>d.category==='feed').map(d=>({name:d.name,qty:d.qty,unit:d.unit,total:n(d.total)})),
+      },
+      harvests: hvs.map(h=>({type:h.type,kg:n(h.kg),size:n(h.size),price:n(h.price),revenue:n(h.revenue)})),
+      growth: grecs.map(r=>({date:r.date,age:r.age,size:n(r.size),mbw:n(r.mbw),pdg:n(r.pdg)})),
+    });
+  });
+  entries=labelCyclesByPond(entries);
+
+  if(!entries.length){showToast('ไม่มีข้อมูลบ่อในปีนี้');return;}
+
+  const dataJson = JSON.stringify({meta:{beYear,year},entries}).replace(/</g,'\\u003c');
+
+  const css = [
+    ':root{--primary:#0f6e56;--primary-dark:#085041;--primary-light:#e1f5ee;--accent:#185fa5;',
+    '--warn:#854f0b;--warn-light:#faeeda;--bg:#f6f7f5;--card:#ffffff;--border:#e2e5e1;',
+    '--text:#1f2622;--text-secondary:#5f6b65;--radius:16px;}',
+    '*{box-sizing:border-box;margin:0;padding:0;}',
+    'body{font-family:"Segoe UI",-apple-system,"Sarabun",sans-serif;background:var(--bg);color:var(--text);padding:16px;}',
+    '.wrap{max-width:1100px;margin:0 auto;}',
+    'header{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border-radius:var(--radius);padding:20px 24px;margin-bottom:16px;}',
+    'header h1{font-size:20px;margin-bottom:4px;}',
+    'header p{font-size:12px;opacity:.85;}',
+    '.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,.04);}',
+    '.card h2{font-size:14px;color:var(--text-secondary);margin-bottom:12px;}',
+    '.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}',
+    '.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;}',
+    '.stat-card .lbl{font-size:11px;color:var(--text-secondary);font-weight:700;margin-bottom:4px;}',
+    '.stat-card .val{font-size:18px;font-weight:800;color:var(--primary-dark);}',
+    '.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;}',
+    '.bar-row .lbl{width:110px;flex-shrink:0;color:var(--text-secondary);font-weight:600;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
+    '.bar-row .track{flex:1;background:#f0f0f0;border-radius:6px;height:18px;position:relative;overflow:hidden;}',
+    '.bar-row .fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--primary);}',
+    '.bar-row .cnt{width:34px;flex-shrink:0;font-weight:700;color:var(--text);}',
+    'table{width:100%;border-collapse:collapse;font-size:13px;}',
+    'th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}',
+    'th{cursor:pointer;user-select:none;color:var(--text-secondary);font-weight:700;background:var(--primary-light);}',
+    'th.active{color:var(--primary-dark);}',
+    'tbody tr{cursor:pointer;}',
+    'tbody tr:hover{background:#f8fafc;}',
+    '.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;}',
+    '.badge.green{background:#dcfce7;color:#166534;}',
+    '.badge.amber{background:var(--warn-light);color:var(--warn);}',
+    '.tablewrap{overflow-x:auto;}',
+    '.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:flex-start;justify-content:center;overflow-y:auto;padding:30px 12px;}',
+    '.modal-overlay.open{display:flex;}',
+    '.modal-box{background:#fff;border-radius:16px;max-width:520px;width:100%;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.2);}',
+    '.modal-header{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;padding:20px 20px 16px;position:relative;}',
+    '.modal-header .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);border:none;color:#fff;font-size:16px;cursor:pointer;}',
+    '.modal-body{padding:6px 20px 20px;}',
+    '.section-head{font-size:13px;font-weight:700;color:var(--primary);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border);}',
+    '.chip-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}',
+    '.chip{background:var(--bg);border-radius:10px;padding:8px 12px;}',
+    '.chip .l{font-size:10px;color:var(--text-secondary);font-weight:700;text-transform:uppercase;}',
+    '.chip .v{font-size:14px;font-weight:700;color:var(--text);}',
+    'details{border:1px solid var(--border);border-radius:10px;margin-bottom:6px;overflow:hidden;}',
+    'details summary{padding:10px 12px;cursor:pointer;font-size:13px;font-weight:600;background:#fff;display:flex;justify-content:space-between;}',
+    '.detail-body{padding:8px 12px;border-top:1px dashed var(--border);}',
+    '.cost-row{display:flex;justify-content:space-between;padding:6px 12px;font-size:13px;border-bottom:1px solid #f5f5f5;}',
+    '.cost-total{display:flex;justify-content:space-between;padding:10px 12px;background:var(--warn-light);font-weight:800;color:var(--warn);border-radius:0 0 10px 10px;}',
+    '.profit-box{border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:10px;}',
+    '.profit-box.pos{background:linear-gradient(135deg,#d1fae5,#a7f3d0);}',
+    '.profit-box.neg{background:linear-gradient(135deg,#fee2e2,#fecaca);}',
+    '@media(max-width:600px){.chip-grid{grid-template-columns:1fr;}}',
+  ].join('\n');
+
+  const rendererSrc = [
+    'function esc(s){',
+    '  if(s==null) return "";',
+    '  return String(s).replace(/[&<>"\']/g, function(c){',
+    '    var map = {"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","\'":"&#39;"};',
+    '    return map[c];',
+    '  });',
+    '}',
+    'function numFmt(v, d){',
+    '  if(v==null || v==="" || isNaN(v)) return "-";',
+    '  if(d==null) d=0;',
+    '  return Number(v).toLocaleString("th-TH", {minimumFractionDigits:d, maximumFractionDigits:d});',
+    '}',
+    'function dateFmt(d){',
+    '  if(!d) return "-";',
+    '  var p = d.split("-");',
+    '  var y = parseInt(p[0],10) + 543;',
+    '  return p[2] + "/" + p[1] + "/" + y;',
+    '}',
+    'var sortState = { col: "releaseDate", dir: 1 };',
+    'function getVal(e, col){',
+    '  switch(col){',
+    '    case "pondId": return e.pondId;',
+    '    case "releaseDate": return e.releaseDate || "";',
+    '    case "closeDate": return e.closeDate || "";',
+    '    case "type": return e.type || "";',
+    '    case "hatchery": return e.hatchery || "";',
+    '    case "population": return e.population || 0;',
+    '    case "stockWeight": return e.stockWeight || 0;',
+    '    case "status": return e.status || "";',
+    '    case "total": return e.total || 0;',
+    '    case "doc": return e.doc || 0;',
+    '    case "caretaker": return e.caretaker || "";',
+    '    default: return "";',
+    '  }',
+    '}',
+    'function sortedEntries(){',
+    '  var arr = DATA.entries.slice();',
+    '  arr.sort(function(a,b){',
+    '    var va = getVal(a, sortState.col), vb = getVal(b, sortState.col);',
+    '    var cmp = va < vb ? -1 : va > vb ? 1 : 0;',
+    '    return cmp * sortState.dir;',
+    '  });',
+    '  return arr;',
+    '}',
+    'function setSort(col){',
+    '  if(sortState.col === col) sortState.dir *= -1;',
+    '  else { sortState.col = col; sortState.dir = 1; }',
+    '  renderTable();',
+    '}',
+    'function renderStats(){',
+    '  var closed = DATA.entries.filter(function(e){ return e.status === "closed"; });',
+    '  var totalYield = 0, totalRev = 0, totalCost = 0;',
+    '  closed.forEach(function(e){',
+    '    totalYield += e.total || 0;',
+    '    totalRev += e.totalRev || 0;',
+    '    totalCost += e.totalCost || 0;',
+    '  });',
+    '  var netProfit = totalRev - totalCost;',
+    '  var stats = [',
+    '    {l:"บ่อที่ปิดแล้ว", v: closed.length + " บ่อ"},',
+    '    {l:"ผลผลิตรวม", v: numFmt(totalYield,0) + " กก."},',
+    '    {l:"รายได้รวม", v: numFmt(totalRev,0) + " ฿"},',
+    '    {l:"ต้นทุนรวม", v: numFmt(totalCost,0) + " ฿"},',
+    '    {l: (netProfit>=0?"กำไรสุทธิ":"ขาดทุนสุทธิ"), v: (netProfit>=0?"+":"-") + numFmt(Math.abs(netProfit),0) + " ฿"}',
+    '  ];',
+    '  var html = "";',
+    '  stats.forEach(function(s){',
+    '    html += "<div class=\\"stat-card\\"><div class=\\"lbl\\">" + esc(s.l) + "</div><div class=\\"val\\">" + esc(s.v) + "</div></div>";',
+    '  });',
+    '  document.getElementById("stats").innerHTML = html;',
+    '}',
+    'function renderBarChart(containerId, counts){',
+    '  var arr = [];',
+    '  Object.keys(counts).forEach(function(k){ arr.push([k, counts[k]]); });',
+    '  arr.sort(function(a,b){ return b[1]-a[1]; });',
+    '  var max = arr.reduce(function(m,x){ return Math.max(m, x[1]); }, 1);',
+    '  var html = "";',
+    '  arr.forEach(function(pair){',
+    '    var pct = Math.round((pair[1]/max)*100);',
+    '    html += "<div class=\\"bar-row\\">" +',
+    '      "<div class=\\"lbl\\">" + esc(pair[0]) + "</div>" +',
+    '      "<div class=\\"track\\"><div class=\\"fill\\" style=\\"width:" + pct + "%\\"></div></div>" +',
+    '      "<div class=\\"cnt\\">" + pair[1] + "</div>" +',
+    '    "</div>";',
+    '  });',
+    '  document.getElementById(containerId).innerHTML = html || "<p style=\\"font-size:12px;color:var(--text-secondary);\\">ไม่มีข้อมูล</p>";',
+    '}',
+    'function renderCharts(){',
+    '  var hatchery = {}, caretaker = {};',
+    '  DATA.entries.forEach(function(e){',
+    '    var h = (e.hatchery || "ไม่ระบุ").trim() || "ไม่ระบุ";',
+    '    hatchery[h] = (hatchery[h]||0) + 1;',
+    '    var c = (e.caretaker || "ไม่ระบุ").trim() || "ไม่ระบุ";',
+    '    caretaker[c] = (caretaker[c]||0) + 1;',
+    '  });',
+    '  renderBarChart("hatcheryChart", hatchery);',
+    '  renderBarChart("caretakerChart", caretaker);',
+    '}',
+    'var COLS = [',
+    '  {key:"pondId", label:"บ่อ"},',
+    '  {key:"releaseDate", label:"ปล่อย"},',
+    '  {key:"closeDate", label:"ปิดบ่อ"},',
+    '  {key:"type", label:"ประเภทกุ้ง"},',
+    '  {key:"hatchery", label:"Hatchery"},',
+    '  {key:"population", label:"ยอดนับ"},',
+    '  {key:"stockWeight", label:"น้ำหนัก"},',
+    '  {key:"status", label:"สถานะ"},',
+    '  {key:"total", label:"ผลผลิต (กก.)"},',
+    '  {key:"doc", label:"DOC"},',
+    '  {key:"caretaker", label:"ผู้ดูแลบ่อ"}',
+    '];',
+    'function renderTable(){',
+    '  var arr = sortedEntries();',
+    '  var thHtml = "<th>#</th>";',
+    '  COLS.forEach(function(c){',
+    '    var active = sortState.col === c.key;',
+    '    var arrow = active ? (sortState.dir===1?" ▲":" ▼") : "";',
+    '    thHtml += "<th class=\\"" + (active?"active":"") + "\\" onclick=\\"setSort(\'" + c.key + "\')\\">" + esc(c.label) + arrow + "</th>";',
+    '  });',
+    '  var rowsHtml = "";',
+    '  arr.forEach(function(e, i){',
+    '    var statusBadge = e.status === "active"',
+    '      ? "<span class=\\"badge green\\">กำลังเลี้ยง</span>"',
+    '      : "<span class=\\"badge amber\\">ปิดบ่อแล้ว</span>";',
+    '    rowsHtml += "<tr onclick=\\"openDetail(\'" + e.cycleId + "\')\\">" +',
+    '      "<td>" + (i+1) + "</td>" +',
+    '      "<td><strong style=\\"color:var(--primary);\\">บ่อ " + esc(e.pondId) + esc(e.cycleLabel||"") + "</strong></td>" +',
+    '      "<td>" + dateFmt(e.releaseDate) + "</td>" +',
+    '      "<td>" + dateFmt(e.closeDate) + "</td>" +',
+    '      "<td>" + esc(e.type||"-") + "</td>" +',
+    '      "<td>" + esc(e.hatchery||"-") + "</td>" +',
+    '      "<td>" + numFmt(e.population,0) + "</td>" +',
+    '      "<td>" + numFmt(e.stockWeight,2) + "</td>" +',
+    '      "<td>" + statusBadge + "</td>" +',
+    '      "<td>" + (e.status==="closed" ? numFmt(e.total,2) : "-") + "</td>" +',
+    '      "<td>" + (e.doc!=null ? e.doc + " วัน" : "-") + "</td>" +',
+    '      "<td>" + esc(e.caretaker||"-") + "</td>" +',
+    '    "</tr>";',
+    '  });',
+    '  document.getElementById("mainTable").innerHTML =',
+    '    "<thead><tr>" + thHtml + "</tr></thead><tbody>" + (rowsHtml || "<tr><td colspan=\\"12\\" style=\\"text-align:center;padding:20px;\\">ไม่มีข้อมูล</td></tr>") + "</tbody>";',
+    '}',
+    'function findEntry(cycleId){',
+    '  for(var i=0;i<DATA.entries.length;i++){',
+    '    if(DATA.entries[i].cycleId === cycleId) return DATA.entries[i];',
+    '  }',
+    '  return null;',
+    '}',
+    'function chip(label, value, unit){',
+    '  if(value == null || value === "") return "";',
+    '  return "<div class=\\"chip\\"><div class=\\"l\\">" + esc(label) + "</div><div class=\\"v\\">" + esc(value) + (unit? " <span style=\\"font-weight:500;color:var(--text-secondary);font-size:11px;\\">"+esc(unit)+"</span>":"") + "</div></div>";',
+    '}',
+    'function chipGrid(){',
+    '  var cells = [];',
+    '  for(var i=0;i<arguments.length;i++){ if(arguments[i]) cells.push(arguments[i]); }',
+    '  if(!cells.length) return "";',
+    '  return "<div class=\\"chip-grid\\">" + cells.join("") + "</div>";',
+    '}',
+    'function sectionHead(title){',
+    '  return "<div class=\\"section-head\\">" + esc(title) + "</div>";',
+    '}',
+    'function openDetail(cycleId){',
+    '  var e = findEntry(cycleId);',
+    '  if(!e) return;',
+    '  var isClosed = e.status === "closed";',
+    '  var html = "";',
+    '  html += "<div class=\\"modal-header\\">" +',
+    '    "<button class=\\"close\\" onclick=\\"closeDetail()\\">✕</button>" +',
+    '    "<div style=\\"font-size:11px;opacity:.75;font-weight:700;letter-spacing:1px;text-transform:uppercase;\\">รายละเอียดบ่อ</div>" +',
+    '    "<div style=\\"font-size:24px;font-weight:800;margin-top:2px;\\">บ่อ " + esc(e.pondId) + esc(e.cycleLabel||"") + "</div>" +',
+    '    "<div style=\\"margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;\\">" +',
+    '      (isClosed',
+    '        ? "<span style=\\"background:rgba(255,255,255,.2);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;\\">🔒 ปิดบ่อแล้ว</span>"',
+    '        : "<span style=\\"background:rgba(255,255,255,.2);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;\\">🟢 กำลังเลี้ยงอยู่</span>") +',
+    '      (e.releaseDate ? "<span style=\\"opacity:.85;font-size:12px;\\">📅 ปล่อย " + dateFmt(e.releaseDate) + "</span>" : "") +',
+    '    "</div>" +',
+    '  "</div>";',
+    '  html += "<div class=\\"modal-body\\">";',
+    '  html += "<div class=\\"chip-grid\\" style=\\"grid-template-columns:repeat(4,1fr);margin-top:14px;\\">" +',
+    '    "<div class=\\"chip\\" style=\\"text-align:center;\\"><div class=\\"l\\">Total</div><div class=\\"v\\">" + (e.total!=null?numFmt(e.total,0):"-") + "</div></div>" +',
+    '    "<div class=\\"chip\\" style=\\"text-align:center;\\"><div class=\\"l\\">Yield</div><div class=\\"v\\">" + (e.yield!=null?numFmt(e.yield,0):"-") + "</div></div>" +',
+    '    "<div class=\\"chip\\" style=\\"text-align:center;\\"><div class=\\"l\\">DOC</div><div class=\\"v\\">" + (e.doc!=null?e.doc:"-") + "</div></div>" +',
+    '    "<div class=\\"chip\\" style=\\"text-align:center;\\"><div class=\\"l\\">FCR</div><div class=\\"v\\">" + (e.fcr!=null?e.fcr:"-") + "</div></div>" +',
+    '  "</div>";',
+    '  html += sectionHead("🐟 ข้อมูลการปล่อยลูกกุ้ง");',
+    '  html += chipGrid(',
+    '    chip("ประเภทกุ้ง", e.type),',
+    '    chip("Hatchery", e.hatchery),',
+    '    chip("ยอดนับ", e.population!=null?numFmt(e.population,0):null, "ตัว"),',
+    '    chip("น้ำหนักปล่อย", e.stockWeight, "กก."),',
+    '    chip("อายุ PL", e.stockAge, "วัน"),',
+    '    chip("Stress test", e.stressTest),',
+    '    chip("Salinity", e.sal, "ppt"),',
+    '    chip("พื้นที่บ่อ", e.area, "ไร่")',
+    '  );',
+    '  if(e.partial1 || e.partial2 || e.closed){',
+    '    html += sectionHead("🦐 การจับ");',
+    '    html += "<div style=\\"background:var(--warn-light);border-radius:12px;padding:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;\\">";',
+    '    [',
+    '      {label:"Partial 1", kg:e.partial1, size:e.partial1Size},',
+    '      {label:"Partial 2", kg:e.partial2, size:e.partial2Size},',
+    '      {label:"Closed", kg:e.closed, size:e.closedSize}',
+    '    ].forEach(function(c){',
+    '      if(c.kg == null) return;',
+    '      html += "<div><div style=\\"font-size:11px;font-weight:700;color:var(--warn);margin-bottom:4px;\\">" + c.label + "</div>" +',
+    '        "<div style=\\"font-size:16px;font-weight:800;color:#6b3a05;\\">" + numFmt(c.kg,1) + "</div>" +',
+    '        "<div style=\\"font-size:10px;color:var(--text-secondary);\\">กก.</div>" +',
+    '        (c.size?"<div style=\\"font-size:11px;margin-top:2px;color:var(--text-secondary);\\">" + c.size + " ตัว/กก.</div>":"") +',
+    '      "</div>";',
+    '    });',
+    '    html += "</div>";',
+    '  }',
+    '  html += sectionHead("📊 ผลสรุป");',
+    '  if(isClosed){',
+    '    html += chipGrid(',
+    '      chip("Total", e.total!=null?numFmt(e.total,1):null, "กก."),',
+    '      chip("Yield", e.yield!=null?numFmt(e.yield,0):null, "กก./ไร่"),',
+    '      chip("MBW Final", e.mbwFinal, "g."),',
+    '      chip("Avg. Size", e.avgSize, "ตัว/กก."),',
+    '      chip("FCR", e.fcr),',
+    '      chip("ADG", e.adg, "g./วัน"),',
+    '      chip("%SR ยอดซื้อ", e.srOrder!=null?e.srOrder+"%":null),',
+    '      chip("%SR ยอดแถม", e.srBonus!=null?e.srBonus+"%":null),',
+    '      chip("Customer", e.customer)',
+    '    );',
+    '  } else {',
+    '    html += "<p style=\\"font-size:12px;color:var(--text-secondary);\\">บ่อนี้ยังไม่ปิด — ยังไม่มีผลสรุปสุดท้าย</p>";',
+    '  }',
+    '  if(e.harvests && e.harvests.length){',
+    '    html += sectionHead("💰 รายได้");',
+    '    html += "<div style=\\"background:linear-gradient(135deg,var(--primary-light),#d1fae5);border-radius:12px;padding:14px;\\">";',
+    '    html += "<div style=\\"display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;\\">" +',
+    '      "<span style=\\"font-size:13px;font-weight:700;color:var(--primary-dark);\\">รายได้รวม</span>" +',
+    '      "<span style=\\"font-size:17px;font-weight:800;color:var(--primary-dark);\\">" + numFmt(e.totalRev,0) + " บาท</span>" +',
+    '    "</div>";',
+    '    e.harvests.forEach(function(h){',
+    '      html += "<div style=\\"display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:var(--text-secondary);\\">" +',
+    '        "<span>" + esc(h.type||"-") + " · " + numFmt(h.kg,1) + " กก. × " + numFmt(h.price,0) + " ฿/กก." + (h.size?" · "+h.size+" ตัว/กก.":"") + "</span>" +',
+    '        "<span style=\\"font-weight:700;color:var(--primary-dark);\\">" + numFmt(h.revenue,0) + " บ.</span>" +',
+    '      "</div>";',
+    '    });',
+    '    html += "</div>";',
+    '  }',
+    '  if(isClosed && (e.costItems.length || e.customCosts.length)){',
+    '    html += sectionHead("📋 สรุปต้นทุน");',
+    '    e.costItems.forEach(function(it){',
+    '      var hasDetail = (it.id === "feed" || it.id === "chemical") && e.costDetails[it.id] && e.costDetails[it.id].length;',
+    '      if(hasDetail){',
+    '        html += "<details><summary>" + esc(it.label) + "<span>" + numFmt(it.amount,0) + " บ.</span></summary>";',
+    '        html += "<div class=\\"detail-body\\">";',
+    '        e.costDetails[it.id].forEach(function(d){',
+    '          html += "<div class=\\"cost-row\\"><span>" + esc(d.name) + (d.qty!=null?" ×"+d.qty+" "+esc(d.unit||""):"") + "</span><span style=\\"color:var(--primary);font-weight:700;\\">" + (d.total!=null?numFmt(d.total,0):"-") + " บ.</span></div>";',
+    '        });',
+    '        html += "</div></details>";',
+    '      } else {',
+    '        html += "<div class=\\"cost-row\\" style=\\"border:1px solid var(--border);border-radius:10px;margin-bottom:6px;\\"><span>" + esc(it.label) + "</span><span style=\\"font-weight:700;color:var(--warn);\\">" + numFmt(it.amount,0) + " บ.</span></div>";',
+    '      }',
+    '    });',
+    '    e.customCosts.forEach(function(it){',
+    '      html += "<div class=\\"cost-row\\" style=\\"border:1px solid var(--border);border-radius:10px;margin-bottom:6px;\\"><span>" + esc(it.name) + "</span><span style=\\"font-weight:700;color:var(--warn);\\">" + numFmt(it.amount,0) + " บ.</span></div>";',
+    '    });',
+    '    html += "<div class=\\"cost-total\\">รวมต้นทุนทั้งหมด <span>" + numFmt(e.totalCost,0) + " บาท</span></div>";',
+    '    var profit = e.totalRev - e.totalCost;',
+    '    var isProfit = profit >= 0;',
+    '    html += "<div class=\\"profit-box " + (isProfit?"pos":"neg") + "\\">" +',
+    '      "<div><div style=\\"font-size:12px;font-weight:700;color:" + (isProfit?"#065f46":"#991b1b") + ";\\">" + (isProfit?"📈 กำไรสุทธิ":"📉 ขาดทุน") + "</div>" +',
+    '      "<div style=\\"font-size:11px;color:" + (isProfit?"#047857":"#b91c1c") + ";margin-top:2px;\\">รายได้ " + numFmt(e.totalRev,0) + " − ต้นทุน " + numFmt(e.totalCost,0) + "</div></div>" +',
+    '      "<span style=\\"font-size:20px;font-weight:900;color:" + (isProfit?"#065f46":"#991b1b") + ";\\">" + numFmt(Math.abs(profit),0) + " บาท</span>" +',
+    '    "</div>";',
+    '  }',
+    '  if(e.growth && e.growth.length){',
+    '    html += sectionHead("📈 ข้อมูลการเติบโต");',
+    '    html += "<div style=\\"overflow-x:auto;\\"><table style=\\"font-size:12px;\\"><thead><tr>" +',
+    '      "<th>วันที่</th><th>อายุ</th><th>ไซส์</th><th>MBW(g)</th><th>ADG</th>" +',
+    '    "</tr></thead><tbody>";',
+    '    e.growth.forEach(function(g){',
+    '      html += "<tr><td>" + dateFmt(g.date) + "</td><td>" + (g.age!=null?g.age:"-") + "</td><td>" + (g.size!=null?g.size:"-") + "</td><td>" + (g.mbw!=null?g.mbw:"-") + "</td><td>" + (g.pdg!=null?g.pdg:"-") + "</td></tr>";',
+    '    });',
+    '    html += "</tbody></table></div>";',
+    '  }',
+    '  if(e.note){',
+    '    html += "<div style=\\"background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:12px;font-size:12px;color:var(--text-secondary);\\">📝 " + esc(e.note) + "</div>";',
+    '  }',
+    '  html += "</div>";',
+    '  document.getElementById("modalContent").innerHTML = html;',
+    '  document.getElementById("modalOverlay").classList.add("open");',
+    '}',
+    'function closeDetail(){',
+    '  document.getElementById("modalOverlay").classList.remove("open");',
+    '}',
+    'renderStats();',
+    'renderCharts();',
+    'renderTable();',
+  ].join('\n');
+
+  const pageHtml = `<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สรุปผลการเลี้ยงกุ้ง ปี ${beYear} — ชาญวิทย์ฟาร์ม</title>
+<style>${css}</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🦐 ชาญวิทย์ฟาร์ม — สรุปผลการเลี้ยงกุ้ง ปี ${beYear}</h1>
+    <p>ไฟล์นี้เปิดดูได้แบบออฟไลน์ — คลิกที่แถวในตารางเพื่อดูรายละเอียดเต็มของแต่ละบ่อ</p>
+  </header>
+  <div class="card">
+    <h2>ภาพรวม</h2>
+    <div class="stat-grid" id="stats"></div>
+  </div>
+  <div class="card">
+    <h2>แหล่งลูกกุ้ง (Hatchery)</h2>
+    <div id="hatcheryChart"></div>
+  </div>
+  <div class="card">
+    <h2>ผู้ดูแลบ่อ</h2>
+    <div id="caretakerChart"></div>
+  </div>
+  <div class="card">
+    <h2>รายการบ่อที่ลงกุ้งปีนี้ (คลิกแถวเพื่อดูรายละเอียด)</h2>
+    <div class="tablewrap"><table id="mainTable"></table></div>
+  </div>
+</div>
+<div id="modalOverlay" class="modal-overlay" onclick="if(event.target===this) closeDetail()">
+  <div class="modal-box"><div id="modalContent"></div></div>
+</div>
+<script>
+var DATA = ${dataJson};
+${rendererSrc}
+<\/script>
+</body>
+</html>`;
+
+  const blob=new Blob([pageHtml],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`สรุปการเลี้ยงกุ้ง_ปี${beYear}_ชาญวิทย์ฟาร์ม.html`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`✅ Export เรียบร้อย — ${entries.length} บ่อ`);
 }
 
 </script>
