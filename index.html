@@ -295,6 +295,12 @@
   /* ===== Misc ===== */
   .hint{font-size:12px;color:var(--text-secondary);margin-top:6px;line-height:1.5;}
   .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+  .hbar-row{margin-bottom:12px;}
+  .hbar-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;margin-bottom:4px;}
+  .hbar-lbl{font-weight:600;color:var(--text);word-break:break-word;}
+  .hbar-cnt{font-weight:700;color:var(--text-secondary);white-space:nowrap;flex-shrink:0;}
+  .hbar-track{background:#f0f0f0;border-radius:8px;height:14px;overflow:hidden;}
+  .hbar-fill{height:100%;border-radius:8px;}
   .stat{
     background:linear-gradient(135deg,#fbfdfc,#f1f6f3);
     border:1px solid var(--border);
@@ -1085,8 +1091,10 @@
       <div class="stat-grid" id="summaryStats" style="margin-bottom:16px;"></div>
       <h2 style="font-size:14px;font-weight:700;color:var(--text-secondary);margin-bottom:10px;">แหล่งลูกกุ้ง (Hatchery)</h2>
       <canvas id="hatcheryChart" style="max-height:220px;"></canvas>
+      <div id="hatcheryChartList" class="hbar-list" style="display:none;"></div>
       <h2 style="font-size:14px;font-weight:700;color:var(--text-secondary);margin:20px 0 10px;">ผู้ดูแลบ่อ</h2>
       <canvas id="caretakerChart" style="max-height:220px;"></canvas>
+      <div id="caretakerChartList" class="hbar-list" style="display:none;"></div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -4540,8 +4548,26 @@ function renderSummaryTab(){
   const colors = ['#0f6e56','#185fa5','#e8632a','#854f0b','#5b21b6','#0e7490','#a32d2d','#065f46'];
   function renderCountBarChart(canvasId, refKey, labels, data){
     if(window[refKey]) window[refKey].destroy();
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const canvas = document.getElementById(canvasId);
+    const list = document.getElementById(canvasId + 'List');
     const horizontal = window.innerWidth < 600;
+    // Phones: plain HTML bars with the label on its own line above the bar,
+    // so long Thai labels can never be clipped or overlapped by the bars.
+    if(horizontal){
+      canvas.style.display = 'none';
+      list.style.display = 'block';
+      const max = Math.max(1, ...data);
+      const safe = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      list.innerHTML = labels.map((l, i) => `
+        <div class="hbar-row">
+          <div class="hbar-head"><span class="hbar-lbl">${safe(l)}</span><span class="hbar-cnt">${data[i]} บ่อ</span></div>
+          <div class="hbar-track"><div class="hbar-fill" style="width:${Math.round(data[i] / max * 100)}%;background:${colors[i % colors.length]};"></div></div>
+        </div>`).join('');
+      return;
+    }
+    canvas.style.display = '';
+    list.style.display = 'none';
+    const ctx = canvas.getContext('2d');
     const countAxis = {
       beginAtZero: true,
       ticks: { stepSize: 1, font: { size: 12 } },
