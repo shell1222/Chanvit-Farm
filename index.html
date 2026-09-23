@@ -3754,6 +3754,50 @@ function closePondSummaryModal(){
   document.getElementById('pondSummaryModal').style.display = 'none';
 }
 
+function openPondSizeHistory(pondId, cycleId){
+  const s = (getCycleById(cycleId)||{}).cycle || {};
+  const all = STATE.growthRecords||[];
+  const recs = all
+    .filter(r=>r.pondId===pondId && (!s.releaseDate || r.date >= s.releaseDate) && (!s.closeDate || r.date <= s.closeDate))
+    .sort((a,b)=>a.date<b.date?-1:1);
+  const fmt = (v,d=2)=> (v==null||v===''||isNaN(v)) ? '-' : Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
+  let html = `
+  <div style="background:linear-gradient(135deg,var(--primary) 0%,var(--primary-dark) 100%);border-radius:16px 16px 0 0;padding:22px 22px 18px;color:#fff;position:relative;">
+    <div style="position:absolute;top:14px;right:14px;display:flex;gap:8px;">
+      <button onclick="openPondSummaryModal('${pondId}','${cycleId}')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:8px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;min-height:36px;">← กลับ</button>
+      <button onclick="closePondSummaryModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:16px;">✕</button>
+    </div>
+    <div style="font-size:12px;opacity:.75;font-weight:600;letter-spacing:1px;margin-bottom:4px;">ประวัติการสุ่มไซส์</div>
+    <div style="font-size:28px;font-weight:800;letter-spacing:-1px;">บ่อ ${pondId}</div>
+    <div style="margin-top:10px;font-size:13px;opacity:.85;">${s.releaseDate ? '📅 ปล่อย '+formatDate(s.releaseDate)+' · ' : ''}สุ่มทั้งหมด ${recs.length} ครั้ง</div>
+  </div>
+  <div style="padding:14px 14px 20px;">`;
+  if(!recs.length){
+    html += `<div class="empty-state"><i class="ti ti-scale"></i>ยังไม่มีข้อมูลการสุ่มไซส์ของบ่อนี้</div>`;
+  } else {
+    html += `<div style="overflow-x:auto;"><table style="width:100%;font-size:13px;"><thead><tr>
+      <th>#</th><th>วันที่</th><th>อายุ (วัน)</th><th>Size (ตัว/กก.)</th><th>MBW (g.)</th><th>PDG (g./วัน)</th><th>อาหารสะสม (กก.)</th>
+    </tr></thead><tbody>`;
+    recs.forEach((r,i)=>{
+      const pdg = r.pdg != null ? r.pdg : calcPDG(r, all);
+      html += `<tr>
+        <td>${i+1}</td>
+        <td style="white-space:nowrap;">${formatDateShort(r.date)}</td>
+        <td>${r.age ?? '-'}</td>
+        <td style="font-weight:700;">${fmt(r.size)}</td>
+        <td>${fmt(r.mbw)}</td>
+        <td>${fmt(pdg)}</td>
+        <td>${fmt(r.accFeed,0)}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+  html += `</div>`;
+  const c = document.getElementById('pondSummaryContent');
+  c.innerHTML = html;
+  c.scrollTop = 0;
+}
+
 function openPondSummaryModal(pondId, cycleId){
   cycleId = cycleId || (getCurrentCycle(pondId)||{}).cycleId;
   const s = (getCycleById(cycleId)||{}).cycle || {};
@@ -3795,6 +3839,7 @@ function openPondSummaryModal(pondId, cycleId){
         ? `<span style="background:rgba(255,255,255,.2);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;">🔒 ปิดบ่อแล้ว</span>`
         : `<span style="background:rgba(255,255,255,.2);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;">🟢 กำลังเลี้ยงอยู่</span>`}
       ${s.releaseDate ? `<span style="opacity:.85;font-size:13px;">📅 ปล่อย ${formatDate(s.releaseDate)}</span>` : ''}
+      <button onclick="openPondSizeHistory('${pondId}','${cycleId}')" style="margin-left:auto;background:#fff;border:none;color:var(--primary-dark);padding:7px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:800;min-height:34px;display:inline-flex;align-items:center;gap:4px;box-shadow:0 2px 6px rgba(0,0,0,.15);-webkit-tap-highlight-color:transparent;">🦐 ไซส์กุ้ง</button>
     </div>
   </div>`;
 
