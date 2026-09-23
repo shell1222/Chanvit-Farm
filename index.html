@@ -3819,7 +3819,7 @@ function openSizeRecordForm(pondId, cycleId, idx){
     <div style="background:var(--bg);border-radius:12px;padding:12px;margin-bottom:12px;">
       <div style="font-weight:700;font-size:14px;margin-bottom:8px;">${idx != null ? '✏️ แก้ไขข้อมูลการสุ่ม' : '➕ เพิ่มข้อมูลการสุ่ม'}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        ${inp('วันที่', 'date', r.date || todayStr(), 'date', `onchange="srAutoAge('${s.releaseDate||''}')"`)}
+        ${inp('วันที่', 'date', r.date || s.closeDate || todayStr(), 'date', `onchange="srAutoAge('${s.releaseDate||''}')"`)}
         ${inp('อายุ (วัน)', 'age', r.age)}
         ${inp('Size (ตัว/กก.)', 'size', r.size, 'number', 'step="0.01" oninput="srSync(\'size\')"')}
         ${inp('MBW (g.)', 'mbw', r.mbw, 'number', 'step="0.01" oninput="srSync(\'mbw\')"')}
