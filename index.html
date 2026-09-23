@@ -551,7 +551,7 @@
   <div class="tab" data-tab="water" onclick="switchTab('water')"><i class="ti ti-droplet"></i> PH / ความโปร่งใส</div>
   <div class="tab" data-tab="releaseplan" onclick="switchTab('releaseplan')">🐟 แผนปล่อย</div>
   <div class="tab" data-tab="harvestplan" onclick="switchTab('harvestplan')">🦐 แผนจับ</div>
-  <div class="tab" data-tab="feedmix" onclick="switchTab('feedmix')"><i class="ti ti-flask"></i> สารผสมอาหาร</div>
+  <div class="tab" data-tab="feedmix" onclick="switchTab('feedmix')"><i class="ti ti-flask"></i> ต้นทุนต่อหน่วย</div>
   <div class="tab" data-tab="ponds" onclick="switchTab('ponds')"><i class="ti ti-list"></i> ข้อมูลบ่อ</div>
   <div class="tab" data-tab="cost" onclick="switchTab('cost')"><i class="ti ti-receipt"></i> บัญชีต้นทุน</div>
   <div class="tab" data-tab="withdraw" onclick="switchTab('withdraw')">📦 เบิกของ</div>
@@ -1832,7 +1832,7 @@ const TAB_LABELS = {
   ponds: 'ข้อมูลบ่อ', status: 'สถานะบ่อ', cost: 'บัญชีต้นทุน', withdraw: 'เบิกของ',
   history: 'ประวัติการจับ', summary: 'สรุปปีนี้',
   releaseplan: 'แผนการปล่อย', harvestplan: 'แผนการจับ',
-  feedmix: 'สารผสมอาหาร'
+  feedmix: 'ต้นทุนต่อหน่วย'
 };
 
 function getUserRole(name){ return (STATE.userRoles && STATE.userRoles[name]) || 'user'; }
