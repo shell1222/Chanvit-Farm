@@ -1513,6 +1513,7 @@ function todayStr(){
 }
 
 function applyLoaded(loaded){
+  _baseDoc = JSON.parse(JSON.stringify(loaded));
   STATE.ponds = loaded.ponds || DEFAULT_PONDS;
   STATE.users = loaded.users || [];
   STATE.feedRecords = (loaded.feedRecords || []).sort((a,b)=>a.date<b.date?1:-1);
@@ -1602,11 +1603,62 @@ function reRenderActiveTab(){
 
 let _realtimeStarted = false;
 let _pauseSnapshotUntil = 0;
+
+// ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
+// เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
+const APP_VERSION = 2026092602;
+let _appOutdated = false;
+function checkAppVersion(data){
+  if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
+  _appOutdated = true;
+  const bar = document.createElement('div');
+  bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#dc2626;color:#fff;padding:12px 16px;text-align:center;font-weight:700;font-size:14px;cursor:pointer;';
+  bar.textContent = '⚠️ มีเวอร์ชันใหม่ — แตะที่นี่เพื่อรีเฟรช (ระบบจะไม่บันทึกข้อมูลจนกว่าจะรีเฟรช)';
+  bar.onclick = forceReloadLatest;
+  document.body.appendChild(bar);
+  if(document.visibilityState === 'hidden') forceReloadLatest();
+}
+function forceReloadLatest(){
+  location.replace(location.pathname + '?v=' + Date.now());
+}
+document.addEventListener('visibilitychange', () => {
+  if(_appOutdated && document.visibilityState === 'visible') forceReloadLatest();
+});
+
+// สำเนาข้อมูลคลาวด์ล่าสุดที่เครื่องนี้โหลดมา — ใช้เทียบว่าเครื่องนี้แก้อะไรจริง (three-way merge ใน saveState)
+let _baseDoc = null;
+function canonJson(o){
+  return JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v)
+    ? Object.keys(v).sort().reduce((a, x) => (a[x] = v[x], a), {}) : v);
+}
+function threeWayMerge(base, local, remote){
+  const b = canonJson(base), l = canonJson(local), r = canonJson(remote);
+  if(l === b) return remote === undefined ? local : remote; // เครื่องนี้ไม่ได้แก้ → ใช้ของคลาวด์
+  if(r === b || remote === undefined) return local;           // คลาวด์ไม่เปลี่ยน → ใช้ของเครื่องนี้
+  // แก้ทั้งสองฝั่ง: ถ้าเป็น map ให้ merge ทีละ key, ถ้าไม่ใช่ใช้ของเครื่องนี้
+  const isMap = x => x && typeof x === 'object' && !Array.isArray(x);
+  if(isMap(local) && isMap(remote)){
+    const bm = isMap(base) ? base : {};
+    const out = {};
+    new Set([...Object.keys(local), ...Object.keys(remote), ...Object.keys(bm)]).forEach(k => {
+      const inL = k in local, inR = k in remote, inB = k in bm;
+      if(!inL && inB && canonJson(remote[k]) === canonJson(bm[k])) return; // เครื่องนี้ลบ
+      if(!inR && inB && canonJson(local[k]) === canonJson(bm[k])) return;  // เครื่องอื่นลบ
+      if(!inL){ if(inR) out[k] = remote[k]; return; }
+      if(!inR){ out[k] = local[k]; return; }
+      out[k] = threeWayMerge(bm[k], local[k], remote[k]);
+    });
+    return out;
+  }
+  return local;
+}
+
 function startRealtimeSync(){
   if(_realtimeStarted) return;
   _realtimeStarted = true;
   db.collection('farms').doc('chanvit').onSnapshot((doc) => {
     if(!doc.exists) return;
+    checkAppVersion(doc.data());
     if(Date.now() < _pauseSnapshotUntil) return;
     applyLoaded(doc.data());
     reRenderActiveTab();
@@ -1619,6 +1671,7 @@ async function loadState(){
   try{
     const doc = await db.collection('farms').doc('chanvit').get();
     if(doc.exists){
+      checkAppVersion(doc.data());
       applyLoaded(doc.data());
     } else {
       const raw = localStorage.getItem('farm-data');
@@ -1671,10 +1724,18 @@ async function saveState(){
     harvestPlan: STATE.harvestPlan || [],
     feedMixItems: STATE.feedMixItems || []
   };
+  if(_appOutdated){ showToast('⚠️ เวอร์ชันเก่า — กำลังรีเฟรช กรุณาทำรายการอีกครั้ง'); setTimeout(forceReloadLatest, 1500); return; }
+  const localCanon = canonJson(payload);
   try{
     const cloudDoc = await db.collection('farms').doc('chanvit').get();
     if(cloudDoc.exists){
       const cd = cloudDoc.data();
+      checkAppVersion(cd);
+      if(_appOutdated){ showToast('⚠️ เวอร์ชันเก่า — กำลังรีเฟรช กรุณาทำรายการอีกครั้ง'); setTimeout(forceReloadLatest, 1500); return; }
+      // three-way merge: ส่วนที่เครื่องนี้ไม่ได้แก้ ใช้ของคลาวด์ — กันเครื่องที่ถือข้อมูลเก่าเขียนทับของใหม่
+      if(_baseDoc){
+        Object.keys(payload).forEach(k => { payload[k] = threeWayMerge(_baseDoc[k], payload[k], cd[k]); });
+      }
       // merge feedRecords: เก็บรายการที่ bot บันทึกแต่ยังไม่อยู่ใน STATE
       const stFeed = new Set(payload.feedRecords.map(r=>r.date));
       const extraFeed = (cd.feedRecords||[]).filter(r=>r.date && !stFeed.has(r.date));
@@ -1707,7 +1768,13 @@ async function saveState(){
       console.warn('payload approaching 1MB Firestore limit:', payloadKB, 'KB');
     }
     localStorage.setItem('farm-data', payloadJson);
-    await db.collection('farms').doc('chanvit').set(payload);
+    await db.collection('farms').doc('chanvit').set({ ...payload, appVersion: APP_VERSION, minAppVersion: Math.max(APP_VERSION, (cloudDoc.exists && cloudDoc.data().minAppVersion) || 0) });
+    _baseDoc = JSON.parse(payloadJson);
+    // ถ้ารับข้อมูลใหม่จากคลาวด์มาระหว่าง merge ให้ STATE ในเครื่องตรงกับที่บันทึกจริง ไม่งั้นรอบหน้าจะเขียนของเก่ากลับ
+    if(canonJson(payload) !== localCanon){
+      applyLoaded(JSON.parse(payloadJson));
+      reRenderActiveTab();
+    }
     autoBackup(payload);
   }catch(e){
     console.error('saveState error', e);
