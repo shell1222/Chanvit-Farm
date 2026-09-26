@@ -1527,7 +1527,15 @@ function applyLoaded(loaded){
   // Migrate legacy single-record-per-pond pondStatus into pondCycles (one array entry per
   // stocking cycle). Idempotent: only runs when pondCycles hasn't been saved yet, so repeat
   // loads (including every realtime onSnapshot fire) never re-migrate or duplicate cycles.
+  // A doc missing pondCycles usually means a stale pre-cycles client overwrote it — its cost/
+  // harvest maps are still cycleId-keyed. Prefer the cycles we already have (in memory or the
+  // local copy) over re-migrating, which would drop every cycleId-keyed record.
+  const prevCycles = STATE.pondCycles;
   STATE.pondCycles = loaded.pondCycles || null;
+  if(!STATE.pondCycles && prevCycles && Object.keys(prevCycles).length) STATE.pondCycles = prevCycles;
+  if(!STATE.pondCycles){
+    try{ const lc = JSON.parse(localStorage.getItem('farm-data')||'{}').pondCycles; if(lc && Object.keys(lc).length) STATE.pondCycles = lc; }catch(e){}
+  }
   if(!STATE.pondCycles){
     STATE.pondCycles = {};
     const remapHarvests = {}, remapCosts = {}, remapCosts2 = {}, remapCostDetails = {};
@@ -1541,6 +1549,13 @@ function applyLoaded(loaded){
       if(STATE.pondCosts2[pondId])      remapCosts2[cycleId]      = STATE.pondCosts2[pondId];
       if(STATE.pondCostDetails[pondId]) remapCostDetails[cycleId] = STATE.pondCostDetails[pondId];
     });
+    // keep entries that are already cycleId-keyed instead of silently dropping them
+    const pondIds = new Set(Object.keys(STATE.pondStatus));
+    const keepKeyed = (src, dst) => Object.keys(src).forEach(k => { if(!pondIds.has(k) && !(k in dst)) dst[k] = src[k]; });
+    keepKeyed(STATE.pondHarvests, remapHarvests);
+    keepKeyed(STATE.pondCosts, remapCosts);
+    keepKeyed(STATE.pondCosts2, remapCosts2);
+    keepKeyed(STATE.pondCostDetails, remapCostDetails);
     STATE.pondHarvests = remapHarvests;
     STATE.pondCosts = remapCosts;
     STATE.pondCosts2 = remapCosts2;
