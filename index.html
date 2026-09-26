@@ -1606,7 +1606,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026092604;
+const APP_VERSION = 2026092605;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -4209,8 +4209,7 @@ function openPondSummaryModal(pondId, cycleId){
     const costs2 = (STATE.pondCosts2 && STATE.pondCosts2[cycleId]) || {};
     const details = (STATE.pondCostDetails && STATE.pondCostDetails[cycleId]) || [];
     if(s.status === 'closed'){
-      const grandCost = COST_ITEMS.reduce((sum, it) => sum + (parseFloat(costs2[it.id]) || 0), 0)
-        + (costs2._custom || []).reduce((sum, it) => sum + (parseFloat(it.amount) || 0), 0);
+      const grandCost = cycleTotalCost(cycleId);
       // Use revenue from pondHarvests first; fall back to s.revenue
       const _hvRev = (STATE.pondHarvests && STATE.pondHarvests[cycleId]) || [];
       const _totalRev = _hvRev.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0) || (parseFloat(s.revenue)||0);
@@ -4269,14 +4268,13 @@ function openPondSummaryModal(pondId, cycleId){
             <span style="font-size:13px;font-weight:600;color:var(--text);">อื่นๆ (อุปกรณ์/รายการย่อย)
               <span style="font-size:11px;color:var(--primary);margin-left:4px;background:var(--primary-light);padding:1px 6px;border-radius:10px;">ดูรายละเอียด ▼</span>
             </span>
-            <span style="font-size:14px;font-weight:700;color:var(--text-secondary);">${otherSum.toLocaleString('th-TH')} บ.</span>
+            <span style="font-size:14px;font-weight:700;color:var(--warn);">${otherSum.toLocaleString('th-TH')} บ.</span>
           </div>
           <div id="${otherId}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">
             ${otherItems.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px solid #f5f5f5;">
               <span style="color:var(--text);">${d.name}${d.qty != null ? `<span style="color:var(--text-secondary);"> ×${d.qty} ${d.unit||''}</span>` : ''}</span>
               <span style="color:var(--primary);font-weight:700;">${d.total != null ? Number(d.total).toLocaleString('th-TH') : '-'} บ.</span>
             </div>`).join('')}
-            <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;text-align:right;">* ยังไม่รวมในยอดต้นทุนด้านล่าง</div>
           </div>
         </div>`;
       }
@@ -4569,16 +4567,15 @@ function showYearlyDetail(type){
   getYearCycles(year).filter(({cycle}) => cycle.status === 'closed').forEach(({pondId, cycle}) => {
     const s = cycle;
     const c = (STATE.pondCosts2 && STATE.pondCosts2[cycle.cycleId]) || {};
-    const fixed = Object.keys(c).filter(k=>k!=='_custom'&&k!=='_labels').reduce((s,k)=>s+(parseFloat(c[k])||0),0);
-    const custom = (c._custom||[]).reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
+    const _costYD = cycleTotalCost(cycle.cycleId);
     const _hvYD = (STATE.pondHarvests && STATE.pondHarvests[cycle.cycleId]) || [];
     const _revYD = _hvYD.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0) || (parseFloat(s.revenue)||0);
     closedEntries.push({
       pondId: pondId,
       cycleId: cycle.cycleId,
       revenue: _revYD,
-      cost: fixed + custom,
-      profit: _revYD - (fixed+custom)
+      cost: _costYD,
+      profit: _revYD - _costYD
     });
   });
   closedEntries = labelCyclesByPond(closedEntries);
@@ -4689,12 +4686,7 @@ function renderSummaryTab(){
     const _revST = _hvST.reduce((s2,h)=>s2+(parseFloat(h.revenue)||0),0) || (parseFloat(e.status.revenue)||0);
     return sum + _revST;
   }, 0);
-  const totalCost = closedEntries.reduce((sum, e) => {
-    const c = (STATE.pondCosts2 && STATE.pondCosts2[e.cycleId]) || {};
-    const fixed = Object.keys(c).filter(k=>k!=='_custom'&&k!=='_labels').reduce((s,k)=>s+(parseFloat(c[k])||0),0);
-    const custom = (c._custom||[]).reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
-    return sum + fixed + custom;
-  }, 0);
+  const totalCost = closedEntries.reduce((sum, e) => sum + cycleTotalCost(e.cycleId), 0);
   const netProfit = totalRevenue - totalCost;
   const profitColor = netProfit >= 0 ? '#0f6e56' : '#dc2626';
   const profitLabel = netProfit >= 0 ? '💚 กำไรสุทธิ' : '🔴 ขาดทุนสุทธิ';
@@ -5152,10 +5144,26 @@ const COST_CAT_LABELS = {
 // เพราะช่องหมวดถูกซ่อนและค่าเริ่มต้นเป็น feed) — ไม่รู้จักชื่อในฐานข้อมูล ใช้หมวดที่บันทึกไว้
 const CATALOG_TO_COST_CAT = { feed:'feed', chemical:'chemical', chemical_dis:'chemical', microbe:'chemical',
   supplement:'chemical', water_cond:'chemical', equipment:'other', other:'other' };
+// ของเบ็ดเตล็ดที่ซื้อรวมอยู่ในบิลเคมีภัณฑ์แล้ว — แสดงใต้เคมีภัณฑ์ ไม่นับซ้ำในยอด "อื่นๆ"
+const CHEM_BILL_ITEMS = ['เทปพันสายไฟ', '2" เกลียวนอก', 'ยอยยาง', 'เชือกเหลือง'];
 function costCatOf(d){
+  if(CHEM_BILL_ITEMS.includes((d.name || '').trim())) return 'chemical';
   const p = (STATE.productCatalog || []).find(x => x.name === (d.name || '').trim());
   if(p && CATALOG_TO_COST_CAT[p.category]) return CATALOG_TO_COST_CAT[p.category];
   return d.category || 'other';
+}
+// ยอดรายการย่อยหมวด "อื่นๆ" (อุปกรณ์ ฯลฯ) — ไม่มีช่องกรอกยอดรวมเอง จึงนับจากรายการย่อยเข้าต้นทุน
+function otherDetailsCost(cycleId){
+  return ((STATE.pondCostDetails && STATE.pondCostDetails[cycleId]) || [])
+    .filter(d => costCatOf(d) === 'other')
+    .reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+}
+// ต้นทุนรวมของรอบเลี้ยง = ยอดที่กรอกตามหมวด + รายการเพิ่มเติม + รายการย่อยหมวดอื่นๆ
+function cycleTotalCost(cycleId){
+  const c = (STATE.pondCosts2 && STATE.pondCosts2[cycleId]) || {};
+  return COST_ITEMS.reduce((s, it) => s + (parseFloat(c[it.id]) || 0), 0)
+    + (c._custom || []).reduce((s, it) => s + (parseFloat(it.amount) || 0), 0)
+    + otherDetailsCost(cycleId);
 }
 const COST_CAT_COLORS = {
   feed:'#22c55e', postlarva:'#f97316', chemical:'#3b82f6',
@@ -6695,8 +6703,7 @@ async function exportSummaryExcel(){
     if(!p) return;
     const s=cycle;
     const costs2=(STATE.pondCosts2&&STATE.pondCosts2[cycle.cycleId])||{};
-    const totalCost=COST_ITEMS.reduce((sum,it)=>sum+(parseFloat(costs2[it.id])||0),0)
-      +(costs2._custom||[]).reduce((sum,it)=>sum+(parseFloat(it.amount)||0),0);
+    const totalCost=cycleTotalCost(cycle.cycleId);
     const hvs=(STATE.pondHarvests&&STATE.pondHarvests[cycle.cycleId])||[];
     const totalRev=hvs.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0)||(parseFloat(s.revenue)||0);
     let p1h={},p2h={},clh={};
@@ -7122,8 +7129,7 @@ async function exportSummaryHTML(){
     const s=cycle;
     const costs2=(STATE.pondCosts2&&STATE.pondCosts2[cycle.cycleId])||{};
     const details=(STATE.pondCostDetails&&STATE.pondCostDetails[cycle.cycleId])||[];
-    const totalCost=COST_ITEMS.reduce((sum,it)=>sum+(parseFloat(costs2[it.id])||0),0)
-      +(costs2._custom||[]).reduce((sum,it)=>sum+(parseFloat(it.amount)||0),0);
+    const totalCost=cycleTotalCost(cycle.cycleId);
     const hvs=(STATE.pondHarvests&&STATE.pondHarvests[cycle.cycleId])||[];
     const totalRev=hvs.reduce((sum,h)=>sum+(parseFloat(h.revenue)||0),0)||(parseFloat(s.revenue)||0);
     const grecs=(STATE.growthRecords||[]).filter(r=>r.pondId===pondId
