@@ -5972,18 +5972,6 @@ function cancelFeedMixEdit(){
 async function init(){
   await loadState();
   startRealtimeSync();
-  // one-time: update pond list to new farm layout
-  if(!localStorage.getItem('ponds-v2')){
-    STATE.ponds = JSON.parse(JSON.stringify(DEFAULT_PONDS));
-    await saveState();
-    localStorage.setItem('ponds-v2','1');
-  }
-  // one-time: load new product catalog from Excel data
-  if(!localStorage.getItem('catalog-reset-v3')){
-    STATE.productCatalog = JSON.parse(JSON.stringify(PRODUCT_CATALOG));
-    await saveState();
-    localStorage.setItem('catalog-reset-v3','1');
-  }
   renderUserList();
   renderFeedTab();
   if(STATE.users.length > 0){
