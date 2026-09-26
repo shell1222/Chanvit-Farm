@@ -1257,6 +1257,8 @@
               <option value="supplement">อาหารเสริม</option>
               <option value="other">อื่นๆ</option>
               <option value="equipment">อุปกรณ์บ่อ</option>
+              <option value="feed">อาหาร</option>
+              <option value="chemical">เคมีภัณฑ์</option>
             </select>
           </div>
           <div class="field">
@@ -1300,6 +1302,8 @@
             <button onclick="setPmCatFilter('supplement')"    id="pmBtn_supplement"  class="pm-cat-btn" style="--cc:#f59e0b;">อาหารเสริม</button>
             <button onclick="setPmCatFilter('other')"         id="pmBtn_other"       class="pm-cat-btn" style="--cc:#94a3b8;">อื่นๆ</button>
             <button onclick="setPmCatFilter('equipment')"     id="pmBtn_equipment"   class="pm-cat-btn" style="--cc:#78716c;">อุปกรณ์บ่อ</button>
+            <button onclick="setPmCatFilter('feed')"          id="pmBtn_feed"        class="pm-cat-btn" style="--cc:#22c55e;">อาหาร</button>
+            <button onclick="setPmCatFilter('chemical')"      id="pmBtn_chemical"    class="pm-cat-btn" style="--cc:#3b82f6;">เคมีภัณฑ์</button>
           </div>
           <div style="display:none;">
             <!-- compat: keep pmCatFilter value available for JS -->
@@ -1311,6 +1315,8 @@
               <option value="supplement">อาหารเสริม</option>
               <option value="other">อื่นๆ</option>
               <option value="equipment">อุปกรณ์บ่อ</option>
+              <option value="feed">อาหาร</option>
+              <option value="chemical">เคมีภัณฑ์</option>
             </select>
           </div>
         </div>
@@ -5674,7 +5680,8 @@ function renderProductTable(){
   const CAT_OPTS = [
     ['water_cond','สารปรับสภาพน้ำ'],['chemical_dis','เคมีภัณฑ์และสารฆ่าเชื้อ'],
     ['microbe','จุลินทรีย์'],['supplement','อาหารเสริม'],
-    ['other','อื่นๆ'],['equipment','อุปกรณ์บ่อ']
+    ['other','อื่นๆ'],['equipment','อุปกรณ์บ่อ'],
+    ['feed','อาหาร'],['chemical','เคมีภัณฑ์']
   ];
   const ROW_COLS = (p, realIdx, i) => {
     const isEditing = realIdx === _editProductIdx;
@@ -5709,7 +5716,7 @@ function renderProductTable(){
 
   if(!q && !catFilter){
     // ── จัดกลุ่มตามหมวดหมู่ ──
-    const CAT_ORDER = ['water_cond','chemical_dis','microbe','supplement','other','equipment'];
+    const CAT_ORDER = ['water_cond','chemical_dis','microbe','supplement','other','equipment','feed','chemical'];
     const groups = {};
     filtered.forEach(p => {
       const cat = p.category || 'other';
