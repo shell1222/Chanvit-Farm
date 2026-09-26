@@ -1273,7 +1273,8 @@
           </div>
           <div class="field">
             <label>หน่วย</label>
-            <input type="text" id="pmUnit" placeholder="กระสอบ, ขวด, ลิตร">
+            <input type="text" id="pmUnit" list="pmUnitList" placeholder="เลือกหรือพิมพ์ เช่น กระสอบ, ขวด, ลิตร">
+            <datalist id="pmUnitList"></datalist>
           </div>
         </div>
         <div style="display:flex;gap:8px;">
@@ -5671,6 +5672,13 @@ function renderProductTable(){
 
   const countEl = document.getElementById('pmCount');
   if(countEl) countEl.textContent = catalog.length;
+
+  // หน่วยที่เคยใช้ → ตัวเลือกในช่องหน่วย
+  const unitList = document.getElementById('pmUnitList');
+  if(unitList){
+    const units = [...new Set(catalog.map(p => (p.unit || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b,'th'));
+    unitList.innerHTML = units.map(u => `<option value="${u.replace(/"/g,'&quot;')}"></option>`).join('');
+  }
 
   if(filtered.length === 0){
     document.getElementById('productTable').innerHTML = '<p class="hint" style="text-align:center;padding:16px;">ไม่พบสินค้า</p>';
