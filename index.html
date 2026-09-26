@@ -1252,7 +1252,7 @@
             <label>หมวด</label>
             <select id="pmCategory">
               <option value="water_cond">สารปรับสภาพน้ำ</option>
-              <option value="chemical_dis">เคมีภัณฑ์และสารฆ่าเชื้อ</option>
+              <option value="chemical_dis">สารฆ่าเชื้อ</option>
               <option value="microbe">จุลินทรีย์</option>
               <option value="supplement">อาหารเสริม</option>
               <option value="other">อื่นๆ</option>
@@ -1298,7 +1298,7 @@
           <div id="pmCatBtns" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
             <button onclick="setPmCatFilter('')"              id="pmBtn_all"         class="pm-cat-btn active" style="--cc:#64748b;">ทุกหมวด</button>
             <button onclick="setPmCatFilter('water_cond')"    id="pmBtn_water_cond"  class="pm-cat-btn" style="--cc:#0ea5e9;">สารปรับสภาพน้ำ</button>
-            <button onclick="setPmCatFilter('chemical_dis')"  id="pmBtn_chemical_dis" class="pm-cat-btn" style="--cc:#ef4444;">เคมีภัณฑ์และสารฆ่าเชื้อ</button>
+            <button onclick="setPmCatFilter('chemical_dis')"  id="pmBtn_chemical_dis" class="pm-cat-btn" style="--cc:#ef4444;">สารฆ่าเชื้อ</button>
             <button onclick="setPmCatFilter('microbe')"       id="pmBtn_microbe"     class="pm-cat-btn" style="--cc:#22c55e;">จุลินทรีย์</button>
             <button onclick="setPmCatFilter('supplement')"    id="pmBtn_supplement"  class="pm-cat-btn" style="--cc:#f59e0b;">อาหารเสริม</button>
             <button onclick="setPmCatFilter('other')"         id="pmBtn_other"       class="pm-cat-btn" style="--cc:#94a3b8;">อื่นๆ</button>
@@ -1311,7 +1311,7 @@
             <select id="pmCatFilter" onchange="renderProductTable()">
               <option value="">ทุกหมวด</option>
               <option value="water_cond">สารปรับสภาพน้ำ</option>
-              <option value="chemical_dis">เคมีภัณฑ์และสารฆ่าเชื้อ</option>
+              <option value="chemical_dis">สารฆ่าเชื้อ</option>
               <option value="microbe">จุลินทรีย์</option>
               <option value="supplement">อาหารเสริม</option>
               <option value="other">อื่นๆ</option>
@@ -5041,7 +5041,7 @@ const COST_CAT_LABELS = {
   laborSalary:'เงินเดือนลูกน้อง', fuel:'ค่าน้ำมัน',
   pipePa:'ค่าท่อ', pipeClose:'ค่าท่อปิดบ่อ', partial:'ค่าพาเชี่ยล', mudPump:'ค่าฉีดเลน', other:'อื่นๆ',
   // product catalog categories
-  water_cond:'สารปรับสภาพน้ำ', chemical_dis:'เคมีภัณฑ์และสารฆ่าเชื้อ',
+  water_cond:'สารปรับสภาพน้ำ', chemical_dis:'สารฆ่าเชื้อ',
   microbe:'จุลินทรีย์', supplement:'อาหารเสริม', equipment:'อุปกรณ์บ่อ'
 };
 const COST_CAT_COLORS = {
@@ -5686,7 +5686,7 @@ function renderProductTable(){
   }
 
   const CAT_OPTS = [
-    ['water_cond','สารปรับสภาพน้ำ'],['chemical_dis','เคมีภัณฑ์และสารฆ่าเชื้อ'],
+    ['water_cond','สารปรับสภาพน้ำ'],['chemical_dis','สารฆ่าเชื้อ'],
     ['microbe','จุลินทรีย์'],['supplement','อาหารเสริม'],
     ['other','อื่นๆ'],['equipment','อุปกรณ์บ่อ'],
     ['feed','อาหาร'],['chemical','เคมีภัณฑ์']
