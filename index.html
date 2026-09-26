@@ -1606,7 +1606,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026092603;
+const APP_VERSION = 2026092604;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -4225,7 +4225,6 @@ function openPondSummaryModal(pondId, cycleId){
         if(val === 0) return;
         const canExpand = (it.id === 'feed' || it.id === 'chemical');
         const detailItems = details.filter(d => costCatOf(d) === it.id);
-        const detailSum = detailItems.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
         const expandId = `costDetail_${cycleId}_${it.id}`;
         html += `<div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#fff;">
           <div style="display:flex;justify-content:space-between;align-items:center;${canExpand ? 'cursor:pointer;' : ''}"
@@ -4242,10 +4241,6 @@ function openPondSummaryModal(pondId, cycleId){
                   <span style="color:var(--text);">${d.name}${d.qty != null ? `<span style="color:var(--text-secondary);"> ×${d.qty} ${d.unit||''}</span>` : ''}</span>
                   <span style="color:var(--primary);font-weight:700;">${d.total != null ? Number(d.total).toLocaleString('th-TH') : '-'} บ.</span>
                 </div>`).join('')}
-                <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0 0;font-weight:700;">
-                  <span>รวมรายการย่อย</span><span>${detailSum.toLocaleString('th-TH')} บ.</span>
-                </div>
-                ${Math.abs(detailSum - val) >= 1 ? `<div style="font-size:11px;color:#dc2626;margin-top:2px;text-align:right;">⚠️ ไม่ตรงกับยอดที่กรอก ${val.toLocaleString('th-TH')} บ. (ต่าง ${(detailSum - val).toLocaleString('th-TH')} บ.)</div>` : ''}
               </div>`
             : `<div id="${expandId}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);text-align:center;">
                 <button onclick="closePondSummaryModal();openCostForPond('${pondId}','${cycleId}')" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">+ ใส่รายละเอียด</button>
