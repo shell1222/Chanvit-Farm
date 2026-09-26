@@ -5355,6 +5355,7 @@ function addCostDetailItem(){
   if(!STATE.pondCostDetails) STATE.pondCostDetails = {};
   if(!STATE.pondCostDetails[costSelectedCycleId]) STATE.pondCostDetails[costSelectedCycleId] = [];
   STATE.pondCostDetails[costSelectedCycleId].push(entry);
+  ensureProductInCatalog(name, priceUnit, unit);
   saveState();
   renderCostDetailItems();
 
@@ -5487,12 +5488,7 @@ function saveWithdraw(){
   if(!bucket._custom) bucket._custom = [];
   bucket._custom.push({ name, amount: total, priceUnit, qty, date, user: STATE.currentUser, ts: Date.now(), source: 'withdraw' });
 
-  // รายการใหม่ที่ยังไม่มีในฐานข้อมูลสินค้า — เก็บชื่อ+ราคาไว้อัตโนมัติเพื่อให้ autocomplete แนะนำได้ในครั้งถัดไป
-  if(!STATE.productCatalog) STATE.productCatalog = [];
-  const knownProduct = STATE.productCatalog.find(p => p.name === name);
-  if(!knownProduct){
-    STATE.productCatalog.push({ name, category: 'other', priceUnit, unit: '' });
-  }
+  ensureProductInCatalog(name, priceUnit, '');
 
   logActivity('เบิกของ', `บ่อ ${pondId} — ${name} x${qty} รวม ${total.toLocaleString('th-TH')} บาท`);
   saveState();
@@ -5598,6 +5594,23 @@ function removeWithdrawItem(cycleId, idx){
    PRODUCT CATALOG MODAL
    ============================================================ */
 let _editProductIdx = -1;
+
+// บันทึกสินค้าที่พิมพ์ในฟอร์มอื่นๆ ลงฐานข้อมูลสินค้าอัตโนมัติ (ถ้ายังไม่มี) — ถ้ามีแล้วเติมราคา/หน่วยที่ยังว่าง
+// ต้องเรียกก่อน saveState() ของฟอร์มนั้น
+function ensureProductInCatalog(name, priceUnit, unit){
+  name = (name || '').trim();
+  if(!name) return;
+  if(!STATE.productCatalog) STATE.productCatalog = [];
+  const price = parseFloat(priceUnit);
+  unit = (unit || '').trim();
+  const existing = STATE.productCatalog.find(p => p.name === name);
+  if(!existing){
+    STATE.productCatalog.push({ name, category: 'other', priceUnit: isNaN(price) ? 0 : price, unit });
+    return;
+  }
+  if(!existing.priceUnit && price > 0) existing.priceUnit = price;
+  if(!existing.unit && unit) existing.unit = unit;
+}
 
 function setPmCatFilter(cat){
   const sel = document.getElementById('pmCatFilter');
@@ -5896,6 +5909,7 @@ function saveFeedMixItem(){
     STATE.feedMixItems.push(item);
     showToast('เพิ่ม ' + name + ' แล้ว');
   }
+  ensureProductInCatalog(name, unitPrice, '');
   saveState();
   cancelFeedMixEdit();
   renderFeedMixTab();
