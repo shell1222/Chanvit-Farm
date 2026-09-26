@@ -1606,7 +1606,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026092602;
+const APP_VERSION = 2026092603;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -3381,7 +3381,7 @@ function renderCostPieChart(){
 
   const catTotals = {};
   items.forEach(it => {
-    const cat = it.category || 'other';
+    const cat = costCatOf(it);
     catTotals[cat] = (catTotals[cat] || 0) + (it.total || 0);
   });
 
@@ -4224,7 +4224,8 @@ function openPondSummaryModal(pondId, cycleId){
         const val = parseFloat(costs2[it.id]) || 0;
         if(val === 0) return;
         const canExpand = (it.id === 'feed' || it.id === 'chemical');
-        const detailItems = details.filter(d => d.category === it.id);
+        const detailItems = details.filter(d => costCatOf(d) === it.id);
+        const detailSum = detailItems.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
         const expandId = `costDetail_${cycleId}_${it.id}`;
         html += `<div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#fff;">
           <div style="display:flex;justify-content:space-between;align-items:center;${canExpand ? 'cursor:pointer;' : ''}"
@@ -4241,6 +4242,10 @@ function openPondSummaryModal(pondId, cycleId){
                   <span style="color:var(--text);">${d.name}${d.qty != null ? `<span style="color:var(--text-secondary);"> ×${d.qty} ${d.unit||''}</span>` : ''}</span>
                   <span style="color:var(--primary);font-weight:700;">${d.total != null ? Number(d.total).toLocaleString('th-TH') : '-'} บ.</span>
                 </div>`).join('')}
+                <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0 0;font-weight:700;">
+                  <span>รวมรายการย่อย</span><span>${detailSum.toLocaleString('th-TH')} บ.</span>
+                </div>
+                ${Math.abs(detailSum - val) >= 1 ? `<div style="font-size:11px;color:#dc2626;margin-top:2px;text-align:right;">⚠️ ไม่ตรงกับยอดที่กรอก ${val.toLocaleString('th-TH')} บ. (ต่าง ${(detailSum - val).toLocaleString('th-TH')} บ.)</div>` : ''}
               </div>`
             : `<div id="${expandId}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);text-align:center;">
                 <button onclick="closePondSummaryModal();openCostForPond('${pondId}','${cycleId}')" style="background:var(--primary);color:#fff;border:none;border-radius:10px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">+ ใส่รายละเอียด</button>
@@ -4259,6 +4264,27 @@ function openPondSummaryModal(pondId, cycleId){
           </div>
         </div>`;
       });
+      // รายการย่อยที่ไม่ใช่อาหาร/เคมีภัณฑ์ (อุปกรณ์ ท่อ PE ฯลฯ) — แสดงให้เห็น แต่ยังไม่รวมในยอดต้นทุน
+      const otherItems = details.filter(d => costCatOf(d) === 'other');
+      if(otherItems.length){
+        const otherSum = otherItems.reduce((s, d) => s + (parseFloat(d.total) || 0), 0);
+        const otherId = `costDetail_${cycleId}_other`;
+        html += `<div style="padding:10px 14px;border-bottom:1px solid var(--border);background:#fff;">
+          <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="var el=document.getElementById('${otherId}');el.style.display=el.style.display==='none'?'block':'none'">
+            <span style="font-size:13px;font-weight:600;color:var(--text);">อื่นๆ (อุปกรณ์/รายการย่อย)
+              <span style="font-size:11px;color:var(--primary);margin-left:4px;background:var(--primary-light);padding:1px 6px;border-radius:10px;">ดูรายละเอียด ▼</span>
+            </span>
+            <span style="font-size:14px;font-weight:700;color:var(--text-secondary);">${otherSum.toLocaleString('th-TH')} บ.</span>
+          </div>
+          <div id="${otherId}" style="display:none;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);">
+            ${otherItems.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px solid #f5f5f5;">
+              <span style="color:var(--text);">${d.name}${d.qty != null ? `<span style="color:var(--text-secondary);"> ×${d.qty} ${d.unit||''}</span>` : ''}</span>
+              <span style="color:var(--primary);font-weight:700;">${d.total != null ? Number(d.total).toLocaleString('th-TH') : '-'} บ.</span>
+            </div>`).join('')}
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;text-align:right;">* ยังไม่รวมในยอดต้นทุนด้านล่าง</div>
+          </div>
+        </div>`;
+      }
       html += `<div style="padding:12px 14px;background:var(--warn-light);display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:13px;font-weight:700;color:var(--warn);">รวมต้นทุนทั้งหมด</span>
         <span style="font-size:16px;font-weight:800;color:var(--warn);">${grandCost.toLocaleString('th-TH')} บาท</span>
@@ -5126,6 +5152,16 @@ const COST_CAT_LABELS = {
   water_cond:'สารปรับสภาพน้ำ', chemical_dis:'สารฆ่าเชื้อ',
   microbe:'จุลินทรีย์', supplement:'อาหารเสริม', equipment:'อุปกรณ์บ่อ'
 };
+
+// หมวดต้นทุนของรายการย่อย — ยึดหมวดจากฐานข้อมูลสินค้าเป็นหลัก (รายการเก่าหลายอันถูกบันทึกเป็น "อาหาร" ผิดๆ
+// เพราะช่องหมวดถูกซ่อนและค่าเริ่มต้นเป็น feed) — ไม่รู้จักชื่อในฐานข้อมูล ใช้หมวดที่บันทึกไว้
+const CATALOG_TO_COST_CAT = { feed:'feed', chemical:'chemical', chemical_dis:'chemical', microbe:'chemical',
+  supplement:'chemical', water_cond:'chemical', equipment:'other', other:'other' };
+function costCatOf(d){
+  const p = (STATE.productCatalog || []).find(x => x.name === (d.name || '').trim());
+  if(p && CATALOG_TO_COST_CAT[p.category]) return CATALOG_TO_COST_CAT[p.category];
+  return d.category || 'other';
+}
 const COST_CAT_COLORS = {
   feed:'#22c55e', postlarva:'#f97316', chemical:'#3b82f6',
   electricity:'#eab308', laborPercent:'#a855f7', laborSalary:'#c084fc',
@@ -5313,7 +5349,7 @@ function renderCostDetailItems(){
 
   const groups = {};
   items.forEach(function(it, idx){
-    const cat = it.category || 'other';
+    const cat = costCatOf(it);
     if(!groups[cat]) groups[cat] = [];
     groups[cat].push({item: it, idx: idx});
   });
@@ -5420,8 +5456,9 @@ function calcCdPreview(){
 
 function addCostDetailItem(){
   if(!costSelectedPond || !costSelectedCycleId){ showToast('กรุณาเลือกบ่อก่อน'); return; }
-  const cat  = document.getElementById('cdCategory').value;
   const name = document.getElementById('cdName').value.trim();
+  // ช่องหมวดถูกซ่อน — สินค้าที่ไม่อยู่ในฐานข้อมูลให้ลง "อื่นๆ" แทนที่จะตกเป็นอาหารตามค่าเริ่มต้น
+  const cat  = costCatOf({ name, category: 'other' });
   const priceUnit = parseFloat(document.getElementById('cdUnitPrice').value) || 0;
   const qty  = parseFloat(document.getElementById('cdQty').value) || 0;
   const unit = document.getElementById('cdUnit').value.trim();
