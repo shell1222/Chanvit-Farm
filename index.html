@@ -295,7 +295,11 @@
   /* ===== Misc ===== */
   .hint{font-size:12px;color:var(--text-secondary);margin-top:6px;line-height:1.5;}
   .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
-  .hbar-row{margin-bottom:12px;}
+  .hbar-row{margin-bottom:12px;cursor:pointer;}
+  .chart-pond-detail{display:none;margin-top:10px;padding:10px 12px;background:#f6faf8;border:1px solid var(--border);border-radius:10px;}
+  .chart-pond-detail .cpd-title{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+  .chart-pond-detail .cpd-close{cursor:pointer;color:var(--text-secondary);font-size:16px;padding:0 4px;}
+  .chart-pond-detail .cpd-chip{display:inline-block;margin:0 6px 6px 0;padding:4px 10px;border-radius:14px;background:#fff;border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--primary);cursor:pointer;}
   .hbar-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;margin-bottom:4px;}
   .hbar-lbl{font-weight:600;color:var(--text);word-break:break-word;}
   .hbar-cnt{font-weight:700;color:var(--text-secondary);white-space:nowrap;flex-shrink:0;}
@@ -1093,9 +1097,11 @@
       <h2 style="font-size:14px;font-weight:700;color:var(--text-secondary);margin-bottom:10px;">แหล่งลูกกุ้ง (Hatchery)</h2>
       <canvas id="hatcheryChart" style="max-height:220px;"></canvas>
       <div id="hatcheryChartList" class="hbar-list" style="display:none;"></div>
+      <div id="hatcheryChartDetail" class="chart-pond-detail"></div>
       <h2 style="font-size:14px;font-weight:700;color:var(--text-secondary);margin:20px 0 10px;">ผู้ดูแลบ่อ</h2>
       <canvas id="caretakerChart" style="max-height:220px;"></canvas>
       <div id="caretakerChartList" class="hbar-list" style="display:none;"></div>
+      <div id="caretakerChartDetail" class="chart-pond-detail"></div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -1629,7 +1635,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026092801;
+const APP_VERSION = 2026103101;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -4804,23 +4810,34 @@ function renderSummaryTab(){
   // instead of being squeezed/rotated under skinny bars (was still overlapping
   // on real phones even after rotating the labels). ───
   const colors = ['#0f6e56','#185fa5','#e8632a','#854f0b','#5b21b6','#0e7490','#a32d2d','#065f46'];
-  function renderCountBarChart(canvasId, refKey, labels, data){
+  function renderCountBarChart(canvasId, refKey, groups){
     if(window[refKey]) window[refKey].destroy();
+    const labels = Object.keys(groups);
+    const data = labels.map(l => groups[l].length);
     const canvas = document.getElementById(canvasId);
     const list = document.getElementById(canvasId + 'List');
+    const detail = document.getElementById(canvasId + 'Detail');
+    detail.style.display = 'none';
     const horizontal = window.innerWidth < 600;
+    const safe = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const showDetail = i => {
+      const ponds = groups[labels[i]].slice().sort((a, b) => String(a.pondId).localeCompare(String(b.pondId), 'th', {numeric: true}));
+      detail.innerHTML = `<div class="cpd-title"><span>${safe(labels[i])} — ${ponds.length} บ่อ</span><span class="cpd-close" onclick="this.closest('.chart-pond-detail').style.display='none'">✕</span></div>`
+        + ponds.map(e => `<span class="cpd-chip" onclick="openPondSummaryModal('${e.pondId}','${e.cycleId}')">บ่อ ${safe(e.pondId)}</span>`).join('');
+      detail.style.display = 'block';
+    };
     // Phones: plain HTML bars with the label on its own line above the bar,
     // so long Thai labels can never be clipped or overlapped by the bars.
     if(horizontal){
       canvas.style.display = 'none';
       list.style.display = 'block';
       const max = Math.max(1, ...data);
-      const safe = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       list.innerHTML = labels.map((l, i) => `
-        <div class="hbar-row">
+        <div class="hbar-row" data-i="${i}">
           <div class="hbar-head"><span class="hbar-lbl">${safe(l)}</span><span class="hbar-cnt">${data[i]} บ่อ</span></div>
           <div class="hbar-track"><div class="hbar-fill" style="width:${Math.round(data[i] / max * 100)}%;background:${colors[i % colors.length]};"></div></div>
         </div>`).join('');
+      list.querySelectorAll('.hbar-row').forEach(r => r.onclick = () => showDetail(+r.dataset.i));
       return;
     }
     canvas.style.display = '';
@@ -4851,9 +4868,14 @@ function renderSummaryTab(){
       options: {
         indexAxis: horizontal ? 'y' : 'x',
         responsive: true,
+        onClick: (evt, els) => { if(els.length) showDetail(els[0].index); },
+        onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.raw} บ่อ` } }
+          tooltip: { callbacks: {
+            label: ctx => ` ${ctx.raw} บ่อ`,
+            afterLabel: ctx => 'บ่อ: ' + groups[labels[ctx.dataIndex]].map(e => e.pondId).join(', ')
+          } }
         },
         scales: horizontal
           ? { x: countAxis, y: labelAxis }
@@ -4863,21 +4885,21 @@ function renderSummaryTab(){
   }
 
   // ─── Hatchery chart ───
-  const hatcheryCount = {};
+  const hatcheryGroups = {};
   entries.forEach(e => {
     const h = (e.status.hatchery || 'ไม่ระบุ').trim();
-    hatcheryCount[h] = (hatcheryCount[h] || 0) + 1;
+    (hatcheryGroups[h] = hatcheryGroups[h] || []).push(e);
   });
-  renderCountBarChart('hatcheryChart', '_hatcheryChart', Object.keys(hatcheryCount), Object.values(hatcheryCount));
+  renderCountBarChart('hatcheryChart', '_hatcheryChart', hatcheryGroups);
 
   // ─── Caretaker chart ───
-  const caretakerCount = {};
+  const caretakerGroups = {};
   entries.forEach(e => {
     const pondData = STATE.ponds.find(p => p.id === e.pondId);
     const c = (pondData && pondData.caretaker ? pondData.caretaker.trim() : '') || 'ไม่ระบุ';
-    caretakerCount[c] = (caretakerCount[c] || 0) + 1;
+    (caretakerGroups[c] = caretakerGroups[c] || []).push(e);
   });
-  renderCountBarChart('caretakerChart', '_caretakerChart', Object.keys(caretakerCount), Object.values(caretakerCount));
+  renderCountBarChart('caretakerChart', '_caretakerChart', caretakerGroups);
 
   const tableEl = document.getElementById('summaryTable');
   if(entries.length === 0){
