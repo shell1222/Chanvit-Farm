@@ -561,6 +561,7 @@
   <div class="tab" data-tab="cost" onclick="switchTab('cost')"><i class="ti ti-receipt"></i> บัญชีต้นทุน</div>
   <div class="tab" data-tab="withdraw" onclick="switchTab('withdraw')">📦 เบิกของ</div>
   <div class="tab" data-tab="summary" onclick="switchTab('summary')">📊 สรุปปีนี้</div>
+  <div class="tab" data-tab="ranking" onclick="switchTab('ranking')">🏆 อันดับบ่อ</div>
 </div>
 
 <div class="container">
@@ -1120,6 +1121,25 @@
   </div>
 
   <!-- ============ TAB: FEED CEILING ============ -->
+  <div class="tab-content" id="tab-ranking" style="display:none;">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+        <h2 style="margin:0;">🏆 อันดับบ่อ ยอดขาย / กำไร</h2>
+        <select id="rankYearSelect" onchange="renderRankingTab()" style="border:1.5px solid var(--border);border-radius:10px;padding:6px 10px;font-size:13px;font-family:inherit;background:#fff;"></select>
+      </div>
+      <p class="hint" style="margin-bottom:10px;">นับเฉพาะบ่อที่ปิดแล้ว (แตะที่บ่อเพื่อดูรายละเอียด)</p>
+      <div id="rankSummary" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;"></div>
+    </div>
+    <div class="card">
+      <h2>💰 ยอดขายสูงสุด</h2>
+      <div id="rankRevenueList" class="hbar-list"></div>
+    </div>
+    <div class="card">
+      <h2>📈 กำไรสูงสุด</h2>
+      <div id="rankProfitList" class="hbar-list"></div>
+    </div>
+  </div>
+
   <div class="tab-content" id="tab-feedceiling" style="display:none;">
     <div class="card">
       <h2><i class="ti ti-chart-bar"></i> เพดานอาหารแต่ละบ่อ (วันนี้)</h2>
@@ -1635,7 +1655,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026103101;
+const APP_VERSION = 2026103102;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -1950,7 +1970,7 @@ const TAB_LABELS = {
   ponds: 'ข้อมูลบ่อ', status: 'สถานะบ่อ', cost: 'บัญชีต้นทุน', withdraw: 'เบิกของ',
   history: 'ประวัติการจับ', summary: 'สรุปปีนี้',
   releaseplan: 'แผนการปล่อย', harvestplan: 'แผนการจับ',
-  feedmix: 'ต้นทุนต่อหน่วย', feedceiling: 'เพดานอาหาร'
+  feedmix: 'ต้นทุนต่อหน่วย', feedceiling: 'เพดานอาหาร', ranking: 'อันดับบ่อ'
 };
 
 function getUserRole(name){ return (STATE.userRoles && STATE.userRoles[name]) || 'user'; }
@@ -1964,8 +1984,10 @@ function applyRoleUI(){
   const costTab = document.querySelector('[data-tab="cost"]');
   const summaryTab = document.querySelector('[data-tab="summary"]');
   const withdrawTab = document.querySelector('[data-tab="withdraw"]');
+  const rankingTab = document.querySelector('[data-tab="ranking"]');
   if(costTab) costTab.style.display = isUser ? 'none' : '';
   if(summaryTab) summaryTab.style.display = isUser ? 'none' : '';
+  if(rankingTab) rankingTab.style.display = isUser ? 'none' : '';
   if(withdrawTab) withdrawTab.style.display = isUser ? 'none' : '';
   // ปุ่มบันทึกสุ่มไซส์ — user ดูได้อย่างเดียว
   const saveBtn = document.getElementById('growthSaveBtn');
@@ -2077,7 +2099,7 @@ function logout(){
   renderUserList();
   document.getElementById('loginOverlay').style.display = 'flex';
   // reset UI — คืนค่า tab ทั้งหมดให้มองเห็น
-  ['cost','summary','withdraw'].forEach(t=>{ const el=document.querySelector('[data-tab="'+t+'"]'); if(el) el.style.display=''; });
+  ['cost','summary','withdraw','ranking'].forEach(t=>{ const el=document.querySelector('[data-tab="'+t+'"]'); if(el) el.style.display=''; });
   const saveBtn=document.getElementById('growthSaveBtn'); if(saveBtn) saveBtn.style.display='';
 }
 
@@ -2245,7 +2267,7 @@ function handlePinComplete(){
    TABS
    ============================================================ */
 function switchTab(name){
-  if(currentRole()==='user' && (name==='cost'||name==='summary'||name==='withdraw')){ showToast('ไม่มีสิทธิ์เข้าถึงส่วนนี้'); return; }
+  if(currentRole()==='user' && (name==='cost'||name==='summary'||name==='withdraw'||name==='ranking')){ showToast('ไม่มีสิทธิ์เข้าถึงส่วนนี้'); return; }
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
   document.querySelectorAll('.tab-content').forEach(c=>{
     c.style.display = (c.id === 'tab-'+name) ? 'block' : 'none';
@@ -2263,6 +2285,7 @@ function switchTab(name){
   if(name==='harvestplan') renderHarvestPlanTab();
   if(name==='feedmix') renderFeedMixTab();
   if(name==='feedceiling') renderFeedCeilingTab();
+  if(name==='ranking') renderRankingTab();
   logActivity('เปิดแท็บ', TAB_LABELS[name] || name);
 }
 
@@ -4576,6 +4599,56 @@ function populateSummaryYearSelect(){
   sel.innerHTML = years.map(y=>`<option value="${y}">ปี ${y+543}</option>`).join('');
   sel.value = summaryYear;
 }
+/* ============================================================
+   RANKING TAB — closed cycles ranked by revenue and by profit
+   ============================================================ */
+function renderRankingTab(){
+  const sel = document.getElementById('rankYearSelect');
+  const prev = sel.value || 'all';
+  sel.innerHTML = '<option value="all">ทุกปี</option>' + getAvailableSummaryYears().map(y=>`<option value="${y}">ปี ${y+543}</option>`).join('');
+  sel.value = prev;
+  const year = sel.value;
+  let entries = [];
+  STATE.ponds.forEach(p => {
+    getPondCycles(p.id).forEach(cycle => {
+      if(year === 'all' || (cycle.releaseDate && cycle.releaseDate.startsWith(year))){
+        entries.push({ pondId: p.id, cycleId: cycle.cycleId, status: cycle });
+      }
+    });
+  });
+  entries = labelCyclesByPond(entries).filter(e => e.status.status === 'closed');
+  const safe = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const rows = entries.map(e => {
+    const hv = (STATE.pondHarvests && STATE.pondHarvests[e.cycleId]) || [];
+    const revenue = hv.reduce((s,h)=>s+(parseFloat(h.revenue)||0),0) || (parseFloat(e.status.revenue)||0);
+    const cost = cycleTotalCost(e.cycleId);
+    const yr = e.status.releaseDate ? ' · ' + (parseInt(e.status.releaseDate.slice(0,4),10)+543) : '';
+    return { ...e, revenue, cost, profit: revenue - cost, name: 'บ่อ ' + e.pondId + (year === 'all' ? yr : e.cycleLabel) };
+  });
+  const fmt = v => Math.round(v).toLocaleString('th-TH');
+  const medal = i => ['🥇','🥈','🥉'][i] || `<span style="display:inline-block;width:20px;text-align:center;color:var(--text-secondary);">${i+1}</span>`;
+  const renderList = (elId, key, colorFn) => {
+    const list = rows.filter(r => r.revenue > 0 || r.cost > 0).sort((a,b) => b[key] - a[key]);
+    const el = document.getElementById(elId);
+    if(!list.length){ el.innerHTML = '<div class="empty-state">ยังไม่มีบ่อที่ปิดแล้ว</div>'; return; }
+    const max = Math.max(1, ...list.map(r => Math.abs(r[key])));
+    el.innerHTML = list.map((r, i) => `
+      <div class="hbar-row" onclick="openPondSummaryModal('${r.pondId}','${r.cycleId}')">
+        <div class="hbar-head"><span class="hbar-lbl">${medal(i)} ${safe(r.name)}</span><span class="hbar-cnt" style="color:${colorFn(r)};">${r[key] < 0 ? '-' : ''}${fmt(Math.abs(r[key]))} ฿</span></div>
+        <div class="hbar-track"><div class="hbar-fill" style="width:${Math.round(Math.abs(r[key]) / max * 100)}%;background:${colorFn(r)};"></div></div>
+      </div>`).join('');
+  };
+  renderList('rankRevenueList', 'revenue', () => '#0f6e56');
+  renderList('rankProfitList', 'profit', r => r.profit >= 0 ? '#16a34a' : '#dc2626');
+  const best = (key) => rows.length ? rows.reduce((a,b) => b[key] > a[key] ? b : a) : null;
+  const bRev = best('revenue'), bProf = best('profit');
+  const chip = (label, r, key) => r ? `<div style="flex:1;min-width:150px;padding:10px 12px;border-radius:12px;background:#f0fdf4;border:1px solid var(--border);cursor:pointer;" onclick="openPondSummaryModal('${r.pondId}','${r.cycleId}')">
+      <div style="font-size:11px;color:var(--text-secondary);font-weight:600;">${label}</div>
+      <div style="font-size:16px;font-weight:800;color:var(--primary-dark);">${safe(r.name)}</div>
+      <div style="font-size:13px;font-weight:700;color:${r[key]>=0?'#0f6e56':'#dc2626'};">${r[key]<0?'-':''}${fmt(Math.abs(r[key]))} ฿</div></div>` : '';
+  document.getElementById('rankSummary').innerHTML = chip('💰 ขายได้มากสุด', bRev, 'revenue') + chip('📈 กำไรมากสุด', bProf, 'profit');
+}
+
 function changeSummaryYear(y){
   summaryYear = parseInt(y,10);
   renderSummaryTab();
