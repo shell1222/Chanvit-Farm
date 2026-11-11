@@ -1663,7 +1663,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026111101;
+const APP_VERSION = 2026111102;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -6379,7 +6379,7 @@ function showFeedChart(pondId){
   const lastRecDate = records.length ? records[records.length-1].date : todayStr();
   const futureDates = [];
   for(let i=1;i<=5;i++){
-    const d = new Date(lastRecDate+'T00:00:00'); d.setDate(d.getDate()+i);
+    const d = new Date(lastRecDate+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+i);
     futureDates.push(d.toISOString().slice(0,10));
   }
   const splitIdx = records.length;
