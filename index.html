@@ -725,7 +725,7 @@
         <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#fde68a;display:inline-block;"></span>บ่อพักน้ำ / ไม่ได้เลี้ยงกุ้ง</span>
         <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#22c55e;display:inline-block;"></span>คลอง</span>
       </div>
-      <div id="pondMapWrap" style="width:100%;box-sizing:border-box;overflow-x:auto;-webkit-overflow-scrolling:touch;background:#f7f9f8;border:1px solid var(--border);border-radius:12px;padding:12px;"></div>
+      <div id="pondMapWrap" style="width:100%;box-sizing:border-box;background:#f7f9f8;border:1px solid var(--border);border-radius:12px;padding:12px;"></div>
       <div id="pondMapStats" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;"></div>
       <p class="hint" style="margin-top:8px;">แตะที่บ่อเพื่อดู/แก้ไขสถานะ</p>
     </div>
@@ -1664,7 +1664,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026111105;
+const APP_VERSION = 2026111106;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -2917,9 +2917,20 @@ const MAP_NONPOND_TEXT = {
   '#22c55e': '#052e16',
 };
 
+// จอแคบ: ผังถูกย่อทั้งภาพให้พอดีจอ จึงขยายตัวอักษร/เส้นในหน่วย SVG ชดเชย และซ่อนข้อความรอง
+const MAP_NARROW_WIDTH = 600;
+let _pondMapNarrow = null;
+window.addEventListener('resize', () => {
+  const tab = document.getElementById('tab-status');
+  if((window.innerWidth < MAP_NARROW_WIDTH) !== _pondMapNarrow && tab && tab.style.display !== 'none') renderPondMap();
+});
+
 function renderPondMap(){
   const wrap = document.getElementById('pondMapWrap');
   const today = todayStr();
+  const narrow = window.innerWidth < MAP_NARROW_WIDTH;
+  _pondMapNarrow = narrow;
+  wrap.style.padding = narrow ? '4px' : '12px';
   const zoneOfTile = id => Object.keys(FARM_ZONES).find(z =>
     FARM_ZONES[z].ponds.includes(id) || (FARM_ZONES[z].mapExtras || []).includes(id));
   const tiles = POND_MAP_LAYOUT.map(p => {
@@ -2932,7 +2943,7 @@ function renderPondMap(){
       ph: Math.round(p.h * UNIT) - 4 };
   });
 
-  const ZONE_PAD = 8, TAB_W = 62, TAB_H = 17;
+  const ZONE_PAD = 8, TAB_W = narrow ? 108 : 62, TAB_H = narrow ? 30 : 17;
   const frames = Object.keys(FARM_ZONES).map(z => {
     const members = tiles.filter(t => t.zone === z);
     return { ...FARM_ZONES[z],
@@ -2947,7 +2958,7 @@ function renderPondMap(){
   const maxX = Math.max(...frames.map(f => f.x2), ...tiles.map(t => t.px + t.pw)) + 2;
   const maxY = Math.max(...frames.map(f => f.y2), ...tiles.map(t => t.py + t.ph)) + 2;
 
-  let svg = `<svg width="100%" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" preserveAspectRatio="xMidYMid meet" style="display:block;min-width:620px;max-height:68vh;font-family:inherit;" xmlns="http://www.w3.org/2000/svg">
+  let svg = `<svg width="100%" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" preserveAspectRatio="xMidYMid meet" style="display:block;max-height:68vh;font-family:inherit;" xmlns="http://www.w3.org/2000/svg">
     <style>
       .pm-tile rect{transition:fill .12s,stroke .12s;}
       .pm-tile.idle:hover rect{stroke:#0f6e56;stroke-width:1.5;opacity:.85;}
@@ -2957,9 +2968,9 @@ function renderPondMap(){
   frames.forEach(f => {
     const tx = f.x1 + 10, ty = f.y1 - TAB_H, r = 5;
     svg += `<g pointer-events="none">
-      <rect x="${f.x1}" y="${f.y1}" width="${f.x2 - f.x1}" height="${f.y2 - f.y1}" rx="10" fill="${f.color}" fill-opacity="0.06" stroke="${f.color}" stroke-opacity="0.45" stroke-width="1"/>
+      <rect x="${f.x1}" y="${f.y1}" width="${f.x2 - f.x1}" height="${f.y2 - f.y1}" rx="10" fill="${f.color}" fill-opacity="0.06" stroke="${f.color}" stroke-opacity="${narrow ? 0.7 : 0.45}" stroke-width="${narrow ? 2.5 : 1}"/>
       <path d="M${tx} ${f.y1} v${-(TAB_H - r)} q0 ${-r} ${r} ${-r} h${TAB_W - 2 * r} q${r} 0 ${r} ${r} v${TAB_H - r} z" fill="${f.color}"/>
-      <text x="${tx + TAB_W / 2}" y="${ty + 12.5}" text-anchor="middle" font-size="10.5" font-weight="700" letter-spacing="1" fill="#fff">${f.label.toUpperCase()}</text>
+      <text x="${tx + TAB_W / 2}" y="${ty + (narrow ? 22 : 12.5)}" text-anchor="middle" font-size="${narrow ? 20 : 10.5}" font-weight="700" letter-spacing="1" fill="#fff">${f.label.toUpperCase()}</text>
     </g>`;
   });
 
@@ -2977,7 +2988,7 @@ function renderPondMap(){
     if(isNonPond){
       const label = p.type === 'canal' ? 'คลอง ' + p.label : (p.label || p.id);
       fill = p.color;
-      lines = [{t:label, s:Math.max(Math.min(10, pw / 3.2), 7), w:600, c:MAP_NONPOND_TEXT[p.color] || '#1f2622'}];
+      lines = narrow && pw < 50 ? [] : [{t:label, s:narrow ? 15 : Math.max(Math.min(10, pw / 3.2), 7), w:600, c:MAP_NONPOND_TEXT[p.color] || '#1f2622'}];
       tip = label;
     } else {
       fill = isActive ? p.color : '#d9d9d9';
@@ -2988,9 +2999,12 @@ function renderPondMap(){
       const doc = isActive && cycle.releaseDate
         ? Math.round((new Date(today + ' 00:00:00') - new Date(cycle.releaseDate + ' 00:00:00')) / 86400000)
         : null;
-      lines = [{t:p.id, s:rotate ? 10 : Math.max(Math.min(15, pw * 0.32, ph * 0.42), 8), w:700, c:main}];
-      if(areaText && !rotate && pw >= 40 && ph >= 40) lines.push({t:areaText, s:9, w:500, c:sub});
-      if(doc != null && ph >= 52) lines.push({t:'DOC ' + doc, s:9, w:600, c:sub});
+      const idSize = narrow
+        ? (rotate ? 14 : Math.max(Math.min(24, pw / (p.id.length * 0.62), ph * 0.55), 10))
+        : (rotate ? 10 : Math.max(Math.min(15, pw * 0.32, ph * 0.42), 8));
+      lines = [{t:p.id, s:idSize, w:700, c:main}];
+      if(!narrow && areaText && !rotate && pw >= 40 && ph >= 40) lines.push({t:areaText, s:9, w:500, c:sub});
+      if(!narrow && doc != null && ph >= 52) lines.push({t:'DOC ' + doc, s:9, w:600, c:sub});
       tip = `บ่อ ${p.id}${areaText ? ' · ' + areaText : ''} · ${isActive ? 'กำลังเลี้ยง' + (doc != null ? ' DOC ' + doc : '') : 'ว่าง / ปิดบ่อ'}`;
     }
 
@@ -3010,7 +3024,7 @@ function renderPondMap(){
     svg += `<clipPath id="${clipId}"><rect x="${px + 1}" y="${py + 1}" width="${pw - 2}" height="${ph - 2}"/></clipPath>`;
     svg += `<g ${isNonPond ? '' : `class="pm-tile ${isActive ? 'active' : 'idle'}" onclick="openPondDetail('${p.id}')" style="cursor:pointer;"`}>
       <title>${tip}</title>
-      <rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="5" fill="${fill}" opacity="${isNonPond || isActive ? 1 : 0.55}" stroke="${stroke}" stroke-width="${isActive ? 3 : 1}"/>
+      <rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="5" fill="${fill}" opacity="${isNonPond || isActive ? 1 : 0.55}" stroke="${stroke}" stroke-width="${isActive ? (narrow ? 5 : 3) : (narrow ? 2 : 1)}"/>
       ${textHtml}
     </g>`;
   });
