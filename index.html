@@ -1115,6 +1115,9 @@
           <button onclick="exportSummaryExcel()" style="display:flex;align-items:center;gap:6px;background:var(--primary);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(15,110,86,.25);">
             📥 Export Excel
           </button>
+          <button id="closeYearBtn" onclick="openCloseYear()" style="display:none;align-items:center;gap:6px;background:#fff;color:#dc2626;border:1.5px solid #fca5a5;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;">
+            🗂️ ปิดปี
+          </button>
         </div>
       </div>
       <div class="table-wrap" id="summaryTable"></div>
@@ -1629,6 +1632,7 @@ function applyLoaded(loaded){
   STATE.releasePlan = loaded.releasePlan || [];
   STATE.harvestPlan = loaded.harvestPlan || [];
   STATE.feedMixItems = loaded.feedMixItems || [];
+  updateStorageWarning(loaded);
 }
 function resetState(){
   STATE.ponds = DEFAULT_PONDS; STATE.users = []; STATE.pondStatus = {}; STATE.pondCycles = {};
@@ -1664,7 +1668,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026111106;
+const APP_VERSION = 2026111107;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -1780,7 +1784,8 @@ async function saveState(){
     userPins: STATE.userPins || {},
     releasePlan: STATE.releasePlan || [],
     harvestPlan: STATE.harvestPlan || [],
-    feedMixItems: STATE.feedMixItems || []
+    feedMixItems: STATE.feedMixItems || [],
+    dataEpoch: (_baseDoc && _baseDoc.dataEpoch) || 0
   };
   if(_appOutdated){ showToast('⚠️ เวอร์ชันเก่า — กำลังรีเฟรช กรุณาทำรายการอีกครั้ง'); setTimeout(forceReloadLatest, 1500); return; }
   const localCanon = canonJson(payload);
@@ -1790,6 +1795,8 @@ async function saveState(){
       const cd = cloudDoc.data();
       checkAppVersion(cd);
       if(_appOutdated){ showToast('⚠️ เวอร์ชันเก่า — กำลังรีเฟรช กรุณาทำรายการอีกครั้ง'); setTimeout(forceReloadLatest, 1500); return; }
+      // มีการปิดปีหลังจากเครื่องนี้โหลดข้อมูล — ห้ามบันทึก ไม่งั้นข้อมูลที่ล้างแล้วจะถูกเขียนกลับ
+      if((cd.dataEpoch || 0) !== (payload.dataEpoch || 0)){ showToast('⚠️ ข้อมูลมีการปิดปีแล้ว — กำลังรีเฟรช กรุณาทำรายการอีกครั้ง'); setTimeout(forceReloadLatest, 1500); return; }
       // three-way merge: ส่วนที่เครื่องนี้ไม่ได้แก้ ใช้ของคลาวด์ — กันเครื่องที่ถือข้อมูลเก่าเขียนทับของใหม่
       if(_baseDoc){
         Object.keys(payload).forEach(k => { payload[k] = threeWayMerge(_baseDoc[k], payload[k], cd[k]); });
@@ -4931,6 +4938,7 @@ function renderSummaryTab(){
   const avgADG       = avgOf('adg');
 
   renderZoneSummary(entries);
+  document.getElementById('closeYearBtn').style.display = currentRole() === 'admin' ? 'flex' : 'none';
 
   const statsEl = document.getElementById('summaryStats');
   const profitBg = netProfit >= 0 ? 'linear-gradient(135deg,#ecfdf5,#d1fae5)' : 'linear-gradient(135deg,#fff1f2,#fee2e2)';
@@ -7445,7 +7453,7 @@ async function exportSummaryHTML(){
       &&(!s.releaseDate||r.date>=s.releaseDate)&&(!s.closeDate||r.date<=s.closeDate)
     ).sort((a,b)=>a.date<b.date?-1:1);
     entries.push({
-      pondId, area:n(p.area), caretaker:p.caretaker||null, cycleId:cycle.cycleId,
+      pondId, zone:zoneName(zoneOfPond(pondId)), area:n(p.area), caretaker:p.caretaker||null, cycleId:cycle.cycleId,
       status:s.status||'active', releaseDate:s.releaseDate||null, closeDate:s.closeDate||null,
       doc:n(s.doc), hatchery:s.hatchery||null, type:s.fromPond||s.shrimpType||null,
       population:n(s.population), stockWeight:n(s.stockWeight), stockAge:n(s.stockAge),
@@ -7597,6 +7605,23 @@ async function exportSummaryHTML(){
     '    html += "<div class=\\"stat-card\\"><div class=\\"lbl\\">" + esc(s.l) + "</div><div class=\\"val\\">" + esc(s.v) + "</div></div>";',
     '  });',
     '  document.getElementById("stats").innerHTML = html;',
+    '}',
+    'function renderZones(){',
+    '  var zones = {};',
+    '  DATA.entries.forEach(function(e){',
+    '    if(e.status !== "closed") return;',
+    '    var z = e.zone || "ไม่ระบุ Zone";',
+    '    if(!zones[z]) zones[z] = {n:0, rev:0, cost:0};',
+    '    zones[z].n++; zones[z].rev += e.totalRev || 0; zones[z].cost += e.totalCost || 0;',
+    '  });',
+    '  var html = "";',
+    '  Object.keys(zones).sort().forEach(function(z){',
+    '    var d = zones[z], p = d.rev - d.cost;',
+    '    html += "<div class=\\"stat-card\\"><div class=\\"lbl\\">" + esc(z) + " · ปิดแล้ว " + d.n + " รอบ</div>" +',
+    '      "<div class=\\"val\\" style=\\"color:" + (p>=0?"#16a34a":"#dc2626") + "\\">" + (p>=0?"+":"-") + numFmt(Math.abs(p),0) + " ฿</div>" +',
+    '      "<div style=\\"font-size:11px;color:var(--text-secondary);margin-top:4px;\\">รายรับ " + numFmt(d.rev,0) + " · ต้นทุน " + numFmt(d.cost,0) + "</div></div>";',
+    '  });',
+    '  document.getElementById("zones").innerHTML = html || "<p style=\\"font-size:12px;color:var(--text-secondary);\\">ไม่มีข้อมูล</p>";',
     '}',
     'function renderBarChart(containerId, counts){',
     '  var arr = [];',
@@ -7818,6 +7843,7 @@ async function exportSummaryHTML(){
     '  document.getElementById("modalOverlay").classList.remove("open");',
     '}',
     'renderStats();',
+    'renderZones();',
     'renderCharts();',
     'renderTable();',
   ].join('\n');
@@ -7839,6 +7865,10 @@ async function exportSummaryHTML(){
   <div class="card">
     <h2>ภาพรวม</h2>
     <div class="stat-grid" id="stats"></div>
+  </div>
+  <div class="card">
+    <h2>สรุปราย Zone (เฉพาะรอบที่ปิดแล้ว)</h2>
+    <div class="stat-grid" id="zones"></div>
   </div>
   <div class="card">
     <h2>แหล่งลูกกุ้ง (Hatchery)</h2>
@@ -7870,6 +7900,194 @@ ${rendererSrc}
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showToast(`✅ Export เรียบร้อย — ${entries.length} บ่อ`);
+}
+
+/* ============================================================
+   พื้นที่เก็บข้อมูล และการปิดปี
+   ============================================================ */
+const FIRESTORE_DOC_LIMIT = 1048576;
+// ประมาณขนาดเอกสารตามวิธีนับของ Firestore (ตัวอักษรไทย 3 ไบต์ จึงใช้ความยาว JSON ไม่ได้)
+function estimateFirestoreBytes(doc){
+  const enc = new TextEncoder();
+  const str = s => enc.encode(s).length + 1;
+  const size = v => v === null || v === undefined ? 1
+    : typeof v === 'boolean' ? 1
+    : typeof v === 'number' ? 8
+    : typeof v === 'string' ? str(v)
+    : Array.isArray(v) ? v.reduce((s, x) => s + size(x), 0)
+    : Object.entries(v).reduce((s, [k, x]) => s + str(k) + size(x), 32);
+  return size(doc) + 48;
+}
+function updateStorageWarning(doc){
+  const topbar = document.querySelector('.topbar');
+  if(!topbar) return;
+  let bar = document.getElementById('storageWarn');
+  const pct = Math.round(estimateFirestoreBytes(doc) / FIRESTORE_DOC_LIMIT * 100);
+  if(pct < 80){ if(bar) bar.style.display = 'none'; return; }
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'storageWarn';
+    topbar.after(bar);
+  }
+  const full = pct >= 92;
+  bar.style.cssText = `display:block;padding:10px 16px;text-align:center;font-size:13px;font-weight:700;background:${full ? '#dc2626' : '#fef3c7'};color:${full ? '#fff' : '#92400e'};`;
+  bar.textContent = `⚠️ พื้นที่ข้อมูลใช้ไปแล้ว ${pct}% ${full ? '— ใกล้เต็ม ถ้าเต็มจะบันทึกข้อมูลไม่ได้' : ''} ควรปิดปีเพื่อล้างครอปที่ปิดแล้ว`;
+}
+
+// คำนวณผลการปิดปีจากสำเนาเอกสาร ไม่แตะฐานข้อมูล: เอาออกเฉพาะครอปที่ปล่อยในปีนั้น
+// ข้อมูลรายวันถูกลบถึงวันปิดครอปล่าสุดของบ่อ ยกเว้นวันที่อยู่ในช่วงของครอปที่เหลือ
+function buildYearClose(doc, year){
+  const next = JSON.parse(JSON.stringify(doc));
+  const removedCycles = [], open = [], cutoff = {}, keptRanges = {};
+  Object.keys(next.pondCycles || {}).forEach(pondId => {
+    const kept = [];
+    next.pondCycles[pondId].forEach(c => {
+      if(!(c.releaseDate && c.releaseDate.startsWith(year + '-'))){ kept.push(c); return; }
+      if(c.status !== 'closed' || !c.closeDate) open.push({pondId, releaseDate:c.releaseDate, status:c.status, noCloseDate:c.status === 'closed'});
+      removedCycles.push({...c, pondId});
+      if(c.closeDate && (!cutoff[pondId] || c.closeDate > cutoff[pondId])) cutoff[pondId] = c.closeDate;
+    });
+    keptRanges[pondId] = kept.map(c => ({from:c.releaseDate || '', to:c.closeDate || '9999-12-31'}));
+    if(kept.length) next.pondCycles[pondId] = kept; else delete next.pondCycles[pondId];
+  });
+  if(open.length) return {ok:false, open, count:removedCycles.length};
+  if(!removedCycles.length) return {ok:false, open:[], count:0};
+
+  const shouldRemove = (pondId, date) => !!cutoff[pondId] && date <= cutoff[pondId]
+    && !keptRanges[pondId].some(r => date >= r.from && date <= r.to);
+  const removed = {cycles:removedCycles, growth:[], water:[], feed:[]};
+  const splitRecords = key => {
+    const keep = [];
+    (next[key] || []).forEach(r => {
+      if(shouldRemove(r.pondId, r.date)) removed[key === 'growthRecords' ? 'growth' : 'water'].push(r);
+      else keep.push(r);
+    });
+    next[key] = keep;
+  };
+  splitRecords('growthRecords');
+  splitRecords('waterRecords');
+  next.feedRecords = (next.feedRecords || []).filter(r => {
+    Object.keys(r.entries || {}).forEach(pondId => {
+      if(shouldRemove(pondId, r.date)){
+        removed.feed.push({date:r.date, pondId, amount:r.entries[pondId]});
+        delete r.entries[pondId];
+      }
+    });
+    return Object.keys(r.entries || {}).length > 0;
+  });
+  ['pondCosts','pondCosts2','pondCostDetails','pondHarvests'].forEach(key => {
+    removedCycles.forEach(c => { if(next[key]) delete next[key][c.cycleId]; });
+  });
+  next.dataEpoch = Date.now();
+  next.appVersion = APP_VERSION;
+  next.minAppVersion = Math.max(APP_VERSION, doc.minAppVersion || 0);
+  return {ok:true, next, removedCanon:canonJson(removed),
+    counts:{cycles:removedCycles.length, growth:removed.growth.length, water:removed.water.length, feed:removed.feed.length},
+    beforeBytes:estimateFirestoreBytes(doc), afterBytes:estimateFirestoreBytes(next)};
+}
+
+let _yc = null;
+async function openCloseYear(){
+  if(currentRole() !== 'admin'){ showToast('เฉพาะผู้ดูแลระบบเท่านั้น'); return; }
+  if(_appOutdated){ showToast('⚠️ เวอร์ชันเก่า — กรุณารีเฟรชก่อน'); return; }
+  showToast('กำลังตรวจข้อมูล...');
+  let doc;
+  try{
+    const snap = await db.collection('farms').doc('chanvit').get();
+    if(!snap.exists) throw new Error('ไม่พบข้อมูล');
+    doc = snap.data();
+  }catch(e){ showToast('⚠️ โหลดข้อมูลไม่สำเร็จ: ' + e.message); return; }
+  const year = String(summaryYear);
+  _yc = {year, be:summaryYear + 543, doc, r:buildYearClose(doc, year), htmlDone:false, jsonDone:false};
+  renderCloseYear();
+  document.getElementById('yearlyDetailModal').style.display = 'flex';
+}
+function closeCloseYear(){
+  document.getElementById('yearlyDetailModal').style.display = 'none';
+  _yc = null;
+}
+function renderCloseYear(){
+  const {be, r} = _yc;
+  const el = document.getElementById('yearlyDetailContent');
+  const head = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <h3 style="font-size:16px;font-weight:800;margin:0;color:var(--text);">🗂️ ปิดปี ${be}</h3>
+    <button onclick="closeCloseYear()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-secondary);">✕</button></div>`;
+  if(!r.ok){
+    const list = r.open.map(o => `<li style="padding:4px 0;">บ่อ ${o.pondId} — ปล่อย ${o.releaseDate} · ${o.noCloseDate ? 'ไม่มีวันที่ปิดบ่อ' : 'ยังไม่ปิดบ่อ'}</li>`).join('');
+    el.innerHTML = head + (r.count
+      ? `<p style="font-size:14px;color:var(--text);margin-bottom:8px;">ยังปิดปีไม่ได้ เหลือ ${r.open.length} ครอปที่ต้องปิดบ่อให้เรียบร้อยก่อน</p><ul style="font-size:13px;color:var(--text-secondary);padding-left:18px;">${list}</ul>`
+      : `<p style="font-size:14px;color:var(--text);">ไม่มีครอปที่ปล่อยในปี ${be}</p>`);
+    return;
+  }
+  const kb = v => Math.round(v / 1024).toLocaleString('th-TH');
+  const stepBtn = (done, fn, label) => `<button onclick="${fn}" style="width:100%;text-align:left;margin-bottom:8px;padding:11px 14px;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:1.5px solid ${done ? '#16a34a' : 'var(--border)'};background:${done ? '#f0fdf4' : '#fff'};color:${done ? '#15803d' : 'var(--text)'};">${done ? '✅' : '⬇️'} ${label}</button>`;
+  const canConfirm = _yc.htmlDone && _yc.jsonDone;
+  el.innerHTML = head + `
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;font-size:13px;color:#991b1b;margin-bottom:14px;line-height:1.6;">
+      จะล้างครอปที่ปล่อยปี ${be} จำนวน <b>${r.counts.cycles} ครอป</b> ออกจากหน้าเว็บ รวมต้นทุนและการจับของครอปเหล่านั้น
+      การสุ่ม ${r.counts.growth} รายการ น้ำ ${r.counts.water} รายการ และอาหาร ${r.counts.feed} รายการ<br>
+      <b>หลังล้างแล้วดูปีนี้บนเว็บไม่ได้ ต้องเปิดจากไฟล์ที่ดาวน์โหลดไว้</b>
+    </div>
+    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">รายชื่อบ่อ ผู้ใช้ รายการสินค้า แผนปล่อย แผนจับ และครอปปีอื่นจะอยู่เหมือนเดิม · พื้นที่ข้อมูล ${kb(r.beforeBytes)} KB → ${kb(r.afterBytes)} KB</p>
+    ${stepBtn(_yc.htmlDone, 'ycDownloadHtml()', `1. ดาวน์โหลดสรุปปี ${be} (HTML)`)}
+    ${stepBtn(_yc.jsonDone, 'ycDownloadJson()', '2. ดาวน์โหลดไฟล์สำรองเต็ม (JSON)')}
+    <label style="display:block;font-size:13px;font-weight:700;margin:12px 0 6px;color:var(--text);">3. พิมพ์ ${be} เพื่อยืนยัน</label>
+    <input id="ycConfirmInput" inputmode="numeric" autocomplete="off" ${canConfirm ? '' : 'disabled'} oninput="ycCheckInput()" placeholder="${canConfirm ? String(be) : 'ดาวน์โหลดทั้ง 2 ไฟล์ก่อน'}" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:16px;font-family:inherit;margin-bottom:10px;">
+    <button id="ycConfirmBtn" onclick="ycConfirm()" disabled style="width:100%;padding:12px;border:none;border-radius:10px;font-size:14px;font-weight:800;font-family:inherit;background:#dc2626;color:#fff;opacity:.4;cursor:not-allowed;">ปิดปีและล้างข้อมูล</button>`;
+}
+async function ycDownloadHtml(){
+  try{ await exportSummaryHTML(); _yc.htmlDone = true; renderCloseYear(); }
+  catch(e){ showToast('⚠️ สร้างไฟล์ไม่สำเร็จ: ' + e.message); }
+}
+function ycDownloadJson(){
+  const d = new Date();
+  const p = n => String(n).padStart(2,'0');
+  const blob = new Blob([JSON.stringify(_yc.doc, null, 1)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `chanvit-สำรองเต็ม-ปี${_yc.be}-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  _yc.jsonDone = true;
+  renderCloseYear();
+}
+function ycCheckInput(){
+  const btn = document.getElementById('ycConfirmBtn');
+  const ok = document.getElementById('ycConfirmInput').value.trim() === String(_yc.be);
+  btn.disabled = !ok;
+  btn.style.opacity = ok ? '1' : '.4';
+  btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+}
+async function ycConfirm(){
+  if(!_yc || !_yc.htmlDone || !_yc.jsonDone) return;
+  if(document.getElementById('ycConfirmInput').value.trim() !== String(_yc.be)) return;
+  const btn = document.getElementById('ycConfirmBtn');
+  btn.disabled = true; btn.textContent = 'กำลังล้างข้อมูล...';
+  const {year, be, r} = _yc;
+  const ref = db.collection('farms').doc('chanvit');
+  let result;
+  try{
+    // เขียนตรงด้วย transaction ไม่ผ่าน saveState เพราะ saveState จะ merge รายการที่ลบกลับมาจากคลาวด์
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      const fresh = buildYearClose(snap.data(), year);
+      if(!fresh.ok) throw new Error('ครอปปีนี้ยังปิดไม่ครบ');
+      if(fresh.removedCanon !== r.removedCanon) throw new Error('DATA_CHANGED');
+      fresh.next.activityLog = [{ts:Date.now(), user:STATE.currentUser || '-', type:'ปิดปี', detail:`ปี ${be} · ${fresh.counts.cycles} ครอป`}, ...(fresh.next.activityLog || [])].slice(0, 200);
+      tx.set(ref, fresh.next);
+      result = fresh;
+    });
+  }catch(e){
+    const changed = e.message === 'DATA_CHANGED';
+    showToast(changed ? '⚠️ ข้อมูลเปลี่ยนหลังดาวน์โหลด — กรุณาเริ่มใหม่เพื่อให้ไฟล์ครบ' : '⚠️ ปิดปีไม่สำเร็จ: ' + e.message);
+    if(changed){ closeCloseYear(); } else { btn.disabled = false; btn.textContent = 'ปิดปีและล้างข้อมูล'; }
+    return;
+  }
+  applyLoaded(result.next);
+  try{ localStorage.setItem('farm-data', JSON.stringify(result.next)); }catch(e){}
+  closeCloseYear();
+  reRenderActiveTab();
+  showToast(`✅ ปิดปี ${be} เรียบร้อย — ล้าง ${result.counts.cycles} ครอปแล้ว`);
 }
 
 </script>
