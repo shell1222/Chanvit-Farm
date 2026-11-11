@@ -2989,35 +2989,50 @@ function renderPondMap(){
     const isActive = !!(cycle && cycle.status === 'active');
     const cx = px + pw / 2, cy = py + ph / 2;
     const clipId = 'c' + p.id.replace(/[^a-zA-Z0-9]/g, '_');
-    const rotate = !isNonPond && pw < 30;
+    // ขนาดตัวอักษรที่พอดีความกว้าง (ประมาณ 0.6em ต่อตัวอักษร; สระ/วรรณยุกต์ไทยไม่กินที่)
+    const textLen = t => String(t).replace(/[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/g, '').length;
+    const fitSize = (t, maxS, room) => Math.min(maxS, room / (textLen(t) * 0.6));
+    const ID_MAX = narrow ? 22 : 14, SUB_MAX = narrow ? 14 : 9, SUB_MIN = narrow ? 10 : 7;
+    let rotate = !isNonPond && pw < 30;
     let fill, stroke = 'none', lines, tip;
 
     if(isNonPond){
       const label = p.type === 'canal' ? 'คลอง ' + p.label : (p.label || p.id);
       fill = p.color;
-      lines = narrow && pw < 50 ? [] : [{t:label, s:narrow ? 15 : Math.max(Math.min(10, pw / 3.2), 7), w:600, c:MAP_NONPOND_TEXT[p.color] || '#1f2622'}];
+      const c = MAP_NONPOND_TEXT[p.color] || '#1f2622';
+      let s = Math.min(fitSize(label, SUB_MAX, pw - 6), ph * 0.6);
+      if(s < SUB_MIN && ph > pw){
+        const rs = Math.min(fitSize(label, SUB_MAX, ph - 6), pw * 0.6);
+        if(rs > s){ s = rs; rotate = true; }
+      }
+      lines = s >= SUB_MIN ? [{t:label, s, w:600, c}] : [];
       tip = label;
     } else {
       fill = isActive ? p.color : '#d9d9d9';
       stroke = isActive ? '#111111' : 'rgba(0,0,0,0.18)';
       const main = isActive ? '#1f2622' : '#6b7280';
-      const sub = isActive ? '#1d4ed8' : '#8a9099';
-      const areaText = pond.area != null ? pond.area + ' ไร่' : null;
+      const sub = isActive ? '#1d4ed8' : '#6b7280';
+      const areaText = pond.area != null && pond.area !== '' ? pond.area + ' ไร่' : null;
       const doc = isActive && cycle.releaseDate
         ? Math.round((new Date(today + ' 00:00:00') - new Date(cycle.releaseDate + ' 00:00:00')) / 86400000)
         : null;
-      const idSize = narrow
-        ? (rotate ? 14 : Math.max(Math.min(24, pw / (p.id.length * 0.62), ph * 0.55), 10))
-        : (rotate ? 10 : Math.max(Math.min(15, pw * 0.32, ph * 0.42), 8));
+      const idSize = rotate
+        ? Math.min(ID_MAX * 0.7, pw * 0.7)
+        : Math.min(fitSize(p.id, ID_MAX, pw - 8), ph * 0.5);
       lines = [{t:p.id, s:idSize, w:700, c:main}];
-      if(!narrow && areaText && !rotate && pw >= 40 && ph >= 40) lines.push({t:areaText, s:9, w:500, c:sub});
-      if(!narrow && doc != null && ph >= 52) lines.push({t:'DOC ' + doc, s:9, w:600, c:sub});
+      if(!rotate && areaText){
+        const as = Math.min(fitSize(areaText, SUB_MAX, pw - 6), (ph - 6) / 1.28 - idSize);
+        if(as >= SUB_MIN) lines.push({t:areaText, s:as, w:600, c:sub});
+      }
+      if(!narrow && !rotate && doc != null && ph >= lines.reduce((h, l) => h + l.s * 1.28, 0) + SUB_MAX * 1.28 + 6) lines.push({t:'DOC ' + doc, s:SUB_MAX, w:600, c:sub});
       tip = `บ่อ ${p.id}${areaText ? ' · ' + areaText : ''} · ${isActive ? 'กำลังเลี้ยง' + (doc != null ? ' DOC ' + doc : '') : 'ว่าง / ปิดบ่อ'}`;
     }
 
     let textHtml;
-    if(rotate){
-      textHtml = `<text transform="rotate(-90 ${cx} ${cy})" x="${cx}" y="${cy + lines[0].s * 0.36}" text-anchor="middle" font-size="${lines[0].s}" font-weight="700" fill="${lines[0].c}">${lines[0].t}</text>`;
+    if(!lines.length){
+      textHtml = '';
+    } else if(rotate){
+      textHtml = `<text transform="rotate(-90 ${cx} ${cy})" x="${cx}" y="${cy + lines[0].s * 0.36}" text-anchor="middle" font-size="${lines[0].s}" font-weight="${lines[0].w}" fill="${lines[0].c}">${lines[0].t}</text>`;
     } else {
       const lineH = l => l.s * 1.28;
       let y = cy - lines.reduce((s, l) => s + lineH(l), 0) / 2;
