@@ -1095,6 +1095,8 @@
         <select id="summaryYearSelect" onchange="changeSummaryYear(this.value)" style="border:1.5px solid var(--border);border-radius:10px;padding:6px 10px;font-size:13px;font-family:inherit;background:#fff;"></select>
       </div>
       <div class="stat-grid" id="summaryStats" style="margin-bottom:16px;"></div>
+      <h2 style="font-size:14px;font-weight:700;color:var(--text-secondary);margin-bottom:10px;">สรุปราย Zone <span style="font-weight:500;font-size:12px;">(เฉพาะรอบที่ปิดแล้ว)</span></h2>
+      <div id="zoneSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:16px;"></div>
       <h2 style="font-size:14px;font-weight:700;color:var(--text-secondary);margin-bottom:10px;">แหล่งลูกกุ้ง (Hatchery)</h2>
       <canvas id="hatcheryChart" style="max-height:220px;"></canvas>
       <div id="hatcheryChartList" class="hbar-list" style="display:none;"></div>
@@ -1663,7 +1665,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026111102;
+const APP_VERSION = 2026111103;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -2888,6 +2890,24 @@ const POND_MAP_LAYOUT = [
 
 const UNIT = 40;
 
+// แบ่งโซนฟาร์ม: คำนวณจาก pondId ตอนแสดงผล ไม่ได้เก็บลงฐานข้อมูล — บ่อใหม่ต้องเพิ่มชื่อใน ponds
+// frame = กรอบบนผังบ่อ [x1,y1,x2,y2], labelAt = ตำแหน่งชื่อโซน [x,y,text-anchor] (หน่วย px ของ SVG)
+const FARM_ZONES = {
+  A: { label:'Zone A', color:'#dc2626', frame:[3,158,596.5,496], labelAt:[8,148,'start'],
+       ponds:['1','2','3','4','5','6','9','10','11','12','13','14','T2/2','T2/3','T2/4','T2/5','T2/6','KC2','KC3','KC4','KC5'] },
+  B: { label:'Zone B', color:'#16a34a', frame:[136,4,340,154], labelAt:[350,84,'start'],
+       ponds:['7','8','15','T2/1','KC1'] },
+  C: { label:'Zone C', color:'#9333ea', frame:[599.5,232,776,496], labelAt:[688,224,'middle'],
+       ponds:['16','17','T2/7','KC6'] },
+};
+const NO_ZONE = '?';
+function zoneOfPond(pondId){
+  return Object.keys(FARM_ZONES).find(z => FARM_ZONES[z].ponds.includes(String(pondId))) || NO_ZONE;
+}
+function zoneName(zone){
+  return zone === NO_ZONE ? 'ไม่ระบุ Zone' : FARM_ZONES[zone].label;
+}
+
 function renderPondMap(){
   const wrap = document.getElementById('pondMapWrap');
   let maxX = 0, maxY = 0;
@@ -2895,7 +2915,7 @@ function renderPondMap(){
     maxX = Math.max(maxX, p.x + p.w);
     maxY = Math.max(maxY, p.y + p.h);
   });
-  const svgW = Math.ceil(maxX * UNIT) + 4;
+  const svgW = Math.ceil(maxX * UNIT) + 6; // เผื่อกรอบ Zone C ด้านขวา
   const svgH = Math.ceil(maxY * UNIT) + 4;
 
   let svg = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" preserveAspectRatio="xMidYMid meet" style="display:block;max-height:68vh;" xmlns="http://www.w3.org/2000/svg">`;
@@ -2965,6 +2985,13 @@ function renderPondMap(){
       <rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="8" fill="${fillColor}" opacity="${opacity}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
       ${textHtml}
     </g>`;
+  });
+
+  Object.values(FARM_ZONES).forEach(z=>{
+    const [x1,y1,x2,y2] = z.frame;
+    const [lx,ly,anchor] = z.labelAt;
+    svg += `<rect x="${x1}" y="${y1}" width="${x2-x1}" height="${y2-y1}" rx="6" fill="none" stroke="${z.color}" stroke-width="2.5" pointer-events="none"/>`;
+    svg += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" font-size="15" font-weight="800" font-family="inherit" fill="${z.color}" pointer-events="none">${z.label}</text>`;
   });
 
   svg += '</svg>';
@@ -4676,10 +4703,51 @@ window.addEventListener('resize', () => {
   }, 250);
 });
 
-function showYearlyDetail(type){
+function renderZoneSummary(entries){
+  const zones = {};
+  const zoneData = z => zones[z] || (zones[z] = { closed:0, active:0, revenue:0, cost:0, noCost:0 });
+  Object.keys(FARM_ZONES).forEach(zoneData);
+  entries.forEach(e => {
+    const d = zoneData(zoneOfPond(e.pondId));
+    if(e.status.status === 'active'){ d.active++; return; }
+    if(e.status.status !== 'closed') return;
+    const hv = (STATE.pondHarvests && STATE.pondHarvests[e.cycleId]) || [];
+    const revenue = hv.reduce((s,h)=>s+(parseFloat(h.revenue)||0),0) || (parseFloat(e.status.revenue)||0);
+    const cost = cycleTotalCost(e.cycleId);
+    d.closed++; d.revenue += revenue; d.cost += cost;
+    if(revenue > 0 && !cost) d.noCost++;
+  });
+  const fmt = v => Math.round(v).toLocaleString('th-TH');
+  const row = (label, value, color) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:3px 0;">
+      <span style="font-size:12px;color:var(--text-secondary);">${label}</span>
+      <span style="font-size:14px;font-weight:700;color:${color};white-space:nowrap;">${value}</span></div>`;
+  document.getElementById('zoneSummary').innerHTML = Object.keys(zones).map(z => {
+    const d = zones[z];
+    const color = z === NO_ZONE ? '#64748b' : FARM_ZONES[z].color;
+    const area = z === NO_ZONE ? null : FARM_ZONES[z].ponds.reduce((s,id)=>{
+      const p = STATE.ponds.find(sp=>sp.id===id);
+      return s + (p ? parseFloat(p.area)||0 : 0);
+    }, 0);
+    const profit = d.revenue - d.cost;
+    const hasMoney = d.revenue > 0 || d.cost > 0;
+    const sub = [area != null ? area.toFixed(1)+' ไร่' : null, `ปิดแล้ว ${d.closed} รอบ`, `กำลังเลี้ยง ${d.active} รอบ`].filter(Boolean).join(' · ');
+    return `<div onclick="showYearlyDetail('profit','${z}')" style="cursor:pointer;background:#fff;border:1.5px solid var(--border);border-top:4px solid ${color};border-radius:12px;padding:12px 14px;">
+      <div style="font-size:15px;font-weight:800;color:${color};">${zoneName(z)}</div>
+      <div style="font-size:11px;color:var(--text-secondary);margin:2px 0 8px;">${sub}</div>
+      ${row('รายรับ', hasMoney ? fmt(d.revenue)+' ฿' : '-', '#0f6e56')}
+      ${row('ต้นทุน', hasMoney ? fmt(d.cost)+' ฿' : '-', '#92400e')}
+      <div style="border-top:1px solid var(--border);margin-top:4px;padding-top:4px;">
+        ${row(profit >= 0 ? 'กำไร' : 'ขาดทุน', hasMoney ? fmt(Math.abs(profit))+' ฿' : '-', profit >= 0 ? '#16a34a' : '#dc2626')}
+      </div>
+      ${d.noCost ? `<div style="font-size:11px;color:#b45309;margin-top:6px;">⚠️ มี ${d.noCost} รอบที่มีรายรับแต่ยังไม่มีต้นทุน</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function showYearlyDetail(type, zone){
   const year = summaryYear.toString();
   let closedEntries = [];
-  getYearCycles(year).filter(({cycle}) => cycle.status === 'closed').forEach(({pondId, cycle}) => {
+  getYearCycles(year).filter(({pondId, cycle}) => cycle.status === 'closed' && (!zone || zoneOfPond(pondId) === zone)).forEach(({pondId, cycle}) => {
     const s = cycle;
     const c = (STATE.pondCosts2 && STATE.pondCosts2[cycle.cycleId]) || {};
     const _costYD = cycleTotalCost(cycle.cycleId);
@@ -4715,7 +4783,7 @@ function showYearlyDetail(type){
 
   document.getElementById('yearlyDetailContent').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h3 style="font-size:16px;font-weight:800;color:var(--text);margin:0;">${titles[type]}</h3>
+      <h3 style="font-size:16px;font-weight:800;color:var(--text);margin:0;">${zone ? `📍 ${zoneName(zone)} — รายได้ ต้นทุน กำไร ปี ${summaryYear + 543}` : titles[type]}</h3>
       <button onclick="document.getElementById('yearlyDetailModal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-secondary);">✕</button>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
@@ -4815,6 +4883,8 @@ function renderSummaryTab(){
   const avgYieldRai  = avgOf('yield');
   const avgFCR       = avgOf('fcr');
   const avgADG       = avgOf('adg');
+
+  renderZoneSummary(entries);
 
   const statsEl = document.getElementById('summaryStats');
   const profitBg = netProfit >= 0 ? 'linear-gradient(135deg,#ecfdf5,#d1fae5)' : 'linear-gradient(135deg,#fff1f2,#fee2e2)';
