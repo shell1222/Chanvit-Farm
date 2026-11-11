@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="ชาญวิทย์ฟาร์ม">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/0.0.0/placeholder.js" onerror="this.remove()"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.1.0/iconfont/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.1.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -719,15 +719,14 @@
   <div class="tab-content" id="tab-status" style="display:none;">
     <div class="card">
       <h2><i class="ti ti-layout-grid"></i> ผังบ่อ / สถานะการเลี้ยง</h2>
-      <p class="hint" style="margin-bottom:10px;">
-        <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:14px;height:14px;border-radius:4px;background:#FFD93D;display:inline-block;"></span> กำลังเลี้ยง</span>
-        &nbsp;&nbsp;
-        <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:14px;height:14px;border-radius:4px;background:#dcdcdc;display:inline-block;"></span> ว่าง / ปิดบ่อ</span>
-        &nbsp;&nbsp;
-        <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:14px;height:14px;border-radius:4px;background:#8B5E3C;display:inline-block;"></span> บ่อพักน้ำ</span>
-      </p>
-      <div id="pondMapWrap" style="width:100%;"></div>
-      <div id="pondMapStats" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#0f6e56;display:inline-block;"></span>กำลังเลี้ยง</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#ffffff;border:1px solid #cfd6d2;box-sizing:border-box;display:inline-block;"></span>ว่าง / ปิดบ่อ</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#ece6d3;display:inline-block;"></span>บ่อพักน้ำ / ไม่ได้เลี้ยงกุ้ง</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#bcd9e6;display:inline-block;"></span>คลอง</span>
+      </div>
+      <div id="pondMapWrap" style="width:100%;box-sizing:border-box;overflow-x:auto;-webkit-overflow-scrolling:touch;background:#f7f9f8;border:1px solid var(--border);border-radius:12px;padding:12px;"></div>
+      <div id="pondMapStats" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;"></div>
       <p class="hint" style="margin-top:8px;">แตะที่บ่อเพื่อดู/แก้ไขสถานะ</p>
     </div>
 
@@ -1665,7 +1664,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026111103;
+const APP_VERSION = 2026111104;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -2885,20 +2884,21 @@ const POND_MAP_LAYOUT = [
   {id:'17',   x:17.1,y:7.7, w:2.0, h:1.7, color:'#bfdbfe'},
 
   // ── คลองล่าง ──
-  {id:'_canal', x:10.5,y:12.5,w:8.8, h:0.6, color:'#22c55e', label:'6.7 ไร่', type:'canal'},
+  {id:'_canal', x:10.5,y:12.65,w:9.35, h:0.6, color:'#22c55e', label:'6.7 ไร่', type:'canal'},
 ];
 
 const UNIT = 40;
 
 // แบ่งโซนฟาร์ม: คำนวณจาก pondId ตอนแสดงผล ไม่ได้เก็บลงฐานข้อมูล — บ่อใหม่ต้องเพิ่มชื่อใน ponds
-// frame = กรอบบนผังบ่อ [x1,y1,x2,y2], labelAt = ตำแหน่งชื่อโซน [x,y,text-anchor] (หน่วย px ของ SVG)
+// mapExtras = พื้นที่บนผังที่ไม่ใช่บ่อเลี้ยง (อยู่ในกรอบโซนแต่ไม่นับเงิน), shift = เลื่อนบนผังให้กรอบโซนไม่ชนกัน (px)
 const FARM_ZONES = {
-  A: { label:'Zone A', color:'#dc2626', frame:[3,158,596.5,496], labelAt:[8,148,'start'],
-       ponds:['1','2','3','4','5','6','9','10','11','12','13','14','T2/2','T2/3','T2/4','T2/5','T2/6','KC2','KC3','KC4','KC5'] },
-  B: { label:'Zone B', color:'#16a34a', frame:[136,4,340,154], labelAt:[350,84,'start'],
+  A: { label:'Zone A', color:'#2f5d8a',
+       ponds:['1','2','3','4','5','6','9','10','11','12','13','14','T2/2','T2/3','T2/4','T2/5','T2/6','KC2','KC3','KC4','KC5'],
+       mapExtras:['_y24','_y25','_y27','_y23','_y21','_sal','_b1','_b2','_b3','_b4','_y42'] },
+  B: { label:'Zone B', color:'#a16207', shift:{y:-14},
        ponds:['7','8','15','T2/1','KC1'] },
-  C: { label:'Zone C', color:'#9333ea', frame:[599.5,232,776,496], labelAt:[688,224,'middle'],
-       ponds:['16','17','T2/7','KC6'] },
+  C: { label:'Zone C', color:'#7c4d8f', shift:{x:14},
+       ponds:['16','17','T2/7','KC6'], mapExtras:['_y46'] },
 };
 const NO_ZONE = '?';
 function zoneOfPond(pondId){
@@ -2908,104 +2908,137 @@ function zoneName(zone){
   return zone === NO_ZONE ? 'ไม่ระบุ Zone' : FARM_ZONES[zone].label;
 }
 
+// โทนเรียบสำหรับพื้นที่ที่ไม่ได้เลี้ยงกุ้ง (key = สีเดิมใน POND_MAP_LAYOUT)
+const MAP_NONPOND_TONES = {
+  '#fde68a': {fill:'#ece6d3', text:'#7d7459'},
+  '#fca5a5': {fill:'#ecdcd6', text:'#8a6f66'},
+  '#92400e': {fill:'#cfc3b4', text:'#5f5344'},
+  '#78350f': {fill:'#c4b6a5', text:'#5f5344'},
+  '#22c55e': {fill:'#bcd9e6', text:'#3f6b80'},
+};
+
 function renderPondMap(){
   const wrap = document.getElementById('pondMapWrap');
-  let maxX = 0, maxY = 0;
-  POND_MAP_LAYOUT.forEach(p=>{
-    maxX = Math.max(maxX, p.x + p.w);
-    maxY = Math.max(maxY, p.y + p.h);
+  const today = todayStr();
+  const zoneOfTile = id => Object.keys(FARM_ZONES).find(z =>
+    FARM_ZONES[z].ponds.includes(id) || (FARM_ZONES[z].mapExtras || []).includes(id));
+  const tiles = POND_MAP_LAYOUT.map(p => {
+    const zone = zoneOfTile(p.id);
+    const shift = (zone && FARM_ZONES[zone].shift) || {};
+    return { ...p, zone,
+      px: Math.round(p.x * UNIT) + 2 + (shift.x || 0),
+      py: Math.round(p.y * UNIT) + 2 + (shift.y || 0),
+      pw: Math.round(p.w * UNIT) - 4,
+      ph: Math.round(p.h * UNIT) - 4 };
   });
-  const svgW = Math.ceil(maxX * UNIT) + 6; // เผื่อกรอบ Zone C ด้านขวา
-  const svgH = Math.ceil(maxY * UNIT) + 4;
 
-  let svg = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" preserveAspectRatio="xMidYMid meet" style="display:block;max-height:68vh;" xmlns="http://www.w3.org/2000/svg">`;
+  const ZONE_PAD = 8, TAB_W = 62, TAB_H = 17;
+  const frames = Object.keys(FARM_ZONES).map(z => {
+    const members = tiles.filter(t => t.zone === z);
+    return { ...FARM_ZONES[z],
+      x1: Math.min(...members.map(t => t.px)) - ZONE_PAD,
+      y1: Math.min(...members.map(t => t.py)) - ZONE_PAD,
+      x2: Math.max(...members.map(t => t.px + t.pw)) + ZONE_PAD,
+      y2: Math.max(...members.map(t => t.py + t.ph)) + ZONE_PAD };
+  });
 
-  POND_MAP_LAYOUT.forEach(p=>{
-    const isPond = STATE.ponds.find(sp=>sp.id===p.id);
-    const isReservoir = p.type === 'reservoir' || p.type === 'canal';
-    const status = getCurrentCycle(p.id);
-    let fillColor = p.color;
-    let opacity = 1;
-    let clickable = false;
-    let displayLabel = p.label || ('บ่อ ' + p.id);
+  const minX = Math.min(...frames.map(f => f.x1), ...tiles.map(t => t.px)) - 2;
+  const minY = Math.min(...frames.map(f => f.y1 - TAB_H), ...tiles.map(t => t.py)) - 2;
+  const maxX = Math.max(...frames.map(f => f.x2), ...tiles.map(t => t.px + t.pw)) + 2;
+  const maxY = Math.max(...frames.map(f => f.y2), ...tiles.map(t => t.py + t.ph)) + 2;
 
-    let isActive = false;
-    if(isPond && !isReservoir){
-      clickable = true;
-      isActive = !!(status && status.status === 'active');
-      if(isActive){
-        fillColor = p.color;
-        opacity = 1;
-      } else {
-        fillColor = '#d9d9d9';
-        opacity = 0.55;
-      }
-      displayLabel = p.id;
-    }
+  let svg = `<svg width="100%" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" preserveAspectRatio="xMidYMid meet" style="display:block;min-width:620px;max-height:68vh;font-family:inherit;" xmlns="http://www.w3.org/2000/svg">
+    <style>
+      .pm-tile rect{transition:fill .12s,stroke .12s;}
+      .pm-tile.idle:hover rect{stroke:#0f6e56;stroke-width:1.5;fill:#f0f8f5;}
+      .pm-tile.active:hover rect{fill:#085041;}
+    </style>`;
 
-    const px = Math.round(p.x * UNIT) + 2;
-    const py = Math.round(p.y * UNIT) + 2;
-    const pw = Math.round(p.w * UNIT) - 4;
-    const ph = Math.round(p.h * UNIT) - 4;
-
-    let strokeColor, strokeWidth;
-    if(isActive){
-      strokeColor = '#111111'; strokeWidth = '3.5';
-    } else if(clickable){
-      strokeColor = 'rgba(0,0,0,0.18)'; strokeWidth = '1.5';
-    } else {
-      strokeColor = 'rgba(0,0,0,0.08)'; strokeWidth = '1.5';
-    }
-
-    const fs = clickable
-      ? Math.max(Math.min(pw * 0.3, ph * 0.45, 13), 6)
-      : Math.max(Math.min(pw * 0.18, ph * 0.32, 10), 5);
-    const clipId = 'c' + p.id.replace(/[^a-zA-Z0-9]/g,'_');
-    const pondData = isPond && !isReservoir ? STATE.ponds.find(sp=>sp.id===p.id) : null;
-    const areaText = pondData && pondData.area != null ? pondData.area + ' ไร่' : null;
-
-    let textHtml;
-    if(clickable && areaText){
-      const fs1 = Math.max(Math.min(pw * 0.28, ph * 0.38, 12), 5);
-      const fs2 = Math.max(Math.min(pw * 0.22, ph * 0.28, 9), 4);
-      const cx = px + pw/2;
-      const cy = py + ph/2;
-      const fillMain = opacity < 1 ? '#888' : '#1f2622';
-      const fillSub  = opacity < 1 ? '#aaa' : '#2563eb';
-      textHtml = `<text clip-path="url(#${clipId})" text-anchor="middle" font-family="inherit">
-        <tspan x="${cx}" y="${cy - fs1*0.25}" font-size="${fs1}" font-weight="700" fill="${fillMain}">${displayLabel}</tspan>
-        <tspan x="${cx}" dy="${fs1*1.15}" font-size="${fs2}" font-weight="600" fill="${fillSub}">${areaText}</tspan>
-      </text>`;
-    } else {
-      textHtml = `<text clip-path="url(#${clipId})" x="${px + pw/2}" y="${py + ph/2 + fs*0.38}" text-anchor="middle" font-size="${fs}" font-weight="${clickable ? '700' : '500'}" font-family="inherit" fill="${opacity < 1 ? '#888' : '#1f2622'}">${displayLabel}</text>`;
-    }
-
-    svg += `<clipPath id="${clipId}"><rect x="${px+2}" y="${py+2}" width="${pw-4}" height="${ph-4}"/></clipPath>`;
-    svg += `<g ${clickable ? `onclick="openPondDetail('${p.id}')" style="cursor:pointer;"` : ''}>
-      <rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="8" fill="${fillColor}" opacity="${opacity}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
-      ${textHtml}
+  frames.forEach(f => {
+    const tx = f.x1 + 10, ty = f.y1 - TAB_H, r = 5;
+    svg += `<g pointer-events="none">
+      <rect x="${f.x1}" y="${f.y1}" width="${f.x2 - f.x1}" height="${f.y2 - f.y1}" rx="10" fill="${f.color}" fill-opacity="0.06" stroke="${f.color}" stroke-opacity="0.45" stroke-width="1"/>
+      <path d="M${tx} ${f.y1} v${-(TAB_H - r)} q0 ${-r} ${r} ${-r} h${TAB_W - 2 * r} q${r} 0 ${r} ${r} v${TAB_H - r} z" fill="${f.color}"/>
+      <text x="${tx + TAB_W / 2}" y="${ty + 12.5}" text-anchor="middle" font-size="10.5" font-weight="700" letter-spacing="1" fill="#fff">${f.label.toUpperCase()}</text>
     </g>`;
   });
 
-  Object.values(FARM_ZONES).forEach(z=>{
-    const [x1,y1,x2,y2] = z.frame;
-    const [lx,ly,anchor] = z.labelAt;
-    svg += `<rect x="${x1}" y="${y1}" width="${x2-x1}" height="${y2-y1}" rx="6" fill="none" stroke="${z.color}" stroke-width="2.5" pointer-events="none"/>`;
-    svg += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" font-size="15" font-weight="800" font-family="inherit" fill="${z.color}" pointer-events="none">${z.label}</text>`;
+  tiles.forEach(p => {
+    const { px, py, pw, ph } = p;
+    const pond = STATE.ponds.find(sp => sp.id === p.id);
+    const isNonPond = p.type === 'reservoir' || p.type === 'canal' || !pond;
+    const cycle = isNonPond ? null : getCurrentCycle(p.id);
+    const isActive = !!(cycle && cycle.status === 'active');
+    const cx = px + pw / 2, cy = py + ph / 2;
+    const clipId = 'c' + p.id.replace(/[^a-zA-Z0-9]/g, '_');
+    const rotate = !isNonPond && pw < 30;
+    let fill, stroke = 'none', lines, tip;
+
+    if(isNonPond){
+      const tone = MAP_NONPOND_TONES[p.color] || {fill:'#ece6d3', text:'#7d7459'};
+      const label = p.type === 'canal' ? 'คลอง ' + p.label : (p.label || p.id);
+      fill = tone.fill;
+      lines = [{t:label, s:Math.max(Math.min(10, pw / 3.2), 7), w:500, c:tone.text}];
+      tip = label;
+    } else {
+      fill = isActive ? '#0f6e56' : '#ffffff';
+      stroke = isActive ? 'none' : '#cfd6d2';
+      const main = isActive ? '#ffffff' : '#3f4b45';
+      const sub = isActive ? 'rgba(255,255,255,0.86)' : '#7a8680';
+      const areaText = pond.area != null ? pond.area + ' ไร่' : null;
+      const doc = isActive && cycle.releaseDate
+        ? Math.round((new Date(today + ' 00:00:00') - new Date(cycle.releaseDate + ' 00:00:00')) / 86400000)
+        : null;
+      lines = [{t:p.id, s:rotate ? 10 : Math.max(Math.min(15, pw * 0.32, ph * 0.42), 8), w:700, c:main}];
+      if(areaText && !rotate && pw >= 40 && ph >= 40) lines.push({t:areaText, s:9, w:500, c:sub});
+      if(doc != null && ph >= 52) lines.push({t:'DOC ' + doc, s:9, w:600, c:sub});
+      tip = `บ่อ ${p.id}${areaText ? ' · ' + areaText : ''} · ${isActive ? 'กำลังเลี้ยง' + (doc != null ? ' DOC ' + doc : '') : 'ว่าง / ปิดบ่อ'}`;
+    }
+
+    let textHtml;
+    if(rotate){
+      textHtml = `<text transform="rotate(-90 ${cx} ${cy})" x="${cx}" y="${cy + lines[0].s * 0.36}" text-anchor="middle" font-size="${lines[0].s}" font-weight="700" fill="${lines[0].c}">${lines[0].t}</text>`;
+    } else {
+      const lineH = l => l.s * 1.28;
+      let y = cy - lines.reduce((s, l) => s + lineH(l), 0) / 2;
+      textHtml = `<text clip-path="url(#${clipId})" text-anchor="middle">` + lines.map(l => {
+        const baseline = y + l.s * 1.02;
+        y += lineH(l);
+        return `<tspan x="${cx}" y="${baseline}" font-size="${l.s}" font-weight="${l.w}" fill="${l.c}">${l.t}</tspan>`;
+      }).join('') + `</text>`;
+    }
+
+    svg += `<clipPath id="${clipId}"><rect x="${px + 1}" y="${py + 1}" width="${pw - 2}" height="${ph - 2}"/></clipPath>`;
+    svg += `<g ${isNonPond ? '' : `class="pm-tile ${isActive ? 'active' : 'idle'}" onclick="openPondDetail('${p.id}')" style="cursor:pointer;"`}>
+      <title>${tip}</title>
+      <rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="5" fill="${fill}" stroke="${stroke}" stroke-width="1"/>
+      ${textHtml}
+    </g>`;
   });
 
   svg += '</svg>';
   wrap.innerHTML = svg;
 
-  const activePonds = STATE.ponds.filter(p => { const c = getCurrentCycle(p.id); return c && c.status === 'active'; });
-  const activeArea = activePonds.reduce((s, p) => s + (parseFloat(p.area) || 0), 0);
-  const emptyPonds = STATE.ponds.filter(p => { const c = getCurrentCycle(p.id); return !c || c.status !== 'active'; });
+  const areaOf = list => list.reduce((s, p) => s + (parseFloat(p.area) || 0), 0);
+  const isActivePond = p => { const c = getCurrentCycle(p.id); return !!(c && c.status === 'active'); };
+  const statCard = (label, color, ponds) => {
+    const active = ponds.filter(isActivePond);
+    const area = areaOf(ponds), activeArea = areaOf(active);
+    const pct = area > 0 ? Math.round(activeArea / area * 100) : 0;
+    return `<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;">
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text);">
+        <span style="width:8px;height:8px;border-radius:2px;background:${color};flex-shrink:0;"></span>${label}
+      </div>
+      <div style="margin-top:6px;font-size:12px;color:var(--text-secondary);"><span style="font-size:20px;font-weight:800;color:var(--text);line-height:1.1;">${active.length}</span> / ${ponds.length} บ่อกำลังเลี้ยง</div>
+      <div style="height:4px;border-radius:2px;background:#edf0ee;margin:8px 0 6px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${color};"></div></div>
+      <div style="font-size:11px;color:var(--text-secondary);">พื้นที่เลี้ยง ${activeArea.toFixed(1)} / ${area.toFixed(1)} ไร่</div>
+    </div>`;
+  };
   const statsEl = document.getElementById('pondMapStats');
   if(statsEl){
-    statsEl.innerHTML = `
-      <span class="badge green" style="font-size:13px;padding:6px 12px;">🟢 กำลังเลี้ยง ${activePonds.length} บ่อ &nbsp;·&nbsp; ${activeArea.toFixed(1)} ไร่</span>
-      <span class="badge" style="font-size:13px;padding:6px 12px;background:#f3f4f6;color:#666;">⬜ ว่าง / ปิด ${emptyPonds.length} บ่อ</span>
-    `;
+    statsEl.innerHTML = statCard('ทั้งฟาร์ม', '#0f6e56', STATE.ponds) +
+      Object.values(FARM_ZONES).map(z =>
+        statCard(z.label, z.color, STATE.ponds.filter(p => z.ponds.includes(p.id)))).join('');
   }
 }
 
