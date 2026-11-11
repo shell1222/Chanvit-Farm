@@ -720,10 +720,10 @@
     <div class="card">
       <h2><i class="ti ti-layout-grid"></i> ผังบ่อ / สถานะการเลี้ยง</h2>
       <div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
-        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#0f6e56;display:inline-block;"></span>กำลังเลี้ยง</span>
-        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#ffffff;border:1px solid #cfd6d2;box-sizing:border-box;display:inline-block;"></span>ว่าง / ปิดบ่อ</span>
-        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#ece6d3;display:inline-block;"></span>บ่อพักน้ำ / ไม่ได้เลี้ยงกุ้ง</span>
-        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#bcd9e6;display:inline-block;"></span>คลอง</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#bfdbfe;border:2px solid #111;box-sizing:border-box;display:inline-block;"></span>กำลังเลี้ยง</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#dcdcdc;display:inline-block;"></span>ว่าง / ปิดบ่อ</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#fde68a;display:inline-block;"></span>บ่อพักน้ำ / ไม่ได้เลี้ยงกุ้ง</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:12px;height:12px;border-radius:3px;background:#22c55e;display:inline-block;"></span>คลอง</span>
       </div>
       <div id="pondMapWrap" style="width:100%;box-sizing:border-box;overflow-x:auto;-webkit-overflow-scrolling:touch;background:#f7f9f8;border:1px solid var(--border);border-radius:12px;padding:12px;"></div>
       <div id="pondMapStats" style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;"></div>
@@ -1664,7 +1664,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026111104;
+const APP_VERSION = 2026111105;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -2908,13 +2908,13 @@ function zoneName(zone){
   return zone === NO_ZONE ? 'ไม่ระบุ Zone' : FARM_ZONES[zone].label;
 }
 
-// โทนเรียบสำหรับพื้นที่ที่ไม่ได้เลี้ยงกุ้ง (key = สีเดิมใน POND_MAP_LAYOUT)
-const MAP_NONPOND_TONES = {
-  '#fde68a': {fill:'#ece6d3', text:'#7d7459'},
-  '#fca5a5': {fill:'#ecdcd6', text:'#8a6f66'},
-  '#92400e': {fill:'#cfc3b4', text:'#5f5344'},
-  '#78350f': {fill:'#c4b6a5', text:'#5f5344'},
-  '#22c55e': {fill:'#bcd9e6', text:'#3f6b80'},
+// สีตัวอักษรบนพื้นที่ที่ไม่ได้เลี้ยงกุ้ง (key = สีพื้นใน POND_MAP_LAYOUT)
+const MAP_NONPOND_TEXT = {
+  '#fde68a': '#713f12',
+  '#fca5a5': '#7f1d1d',
+  '#92400e': '#fff7ed',
+  '#78350f': '#fff7ed',
+  '#22c55e': '#052e16',
 };
 
 function renderPondMap(){
@@ -2950,8 +2950,8 @@ function renderPondMap(){
   let svg = `<svg width="100%" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" preserveAspectRatio="xMidYMid meet" style="display:block;min-width:620px;max-height:68vh;font-family:inherit;" xmlns="http://www.w3.org/2000/svg">
     <style>
       .pm-tile rect{transition:fill .12s,stroke .12s;}
-      .pm-tile.idle:hover rect{stroke:#0f6e56;stroke-width:1.5;fill:#f0f8f5;}
-      .pm-tile.active:hover rect{fill:#085041;}
+      .pm-tile.idle:hover rect{stroke:#0f6e56;stroke-width:1.5;opacity:.85;}
+      .pm-tile.active:hover rect{stroke:#0f6e56;}
     </style>`;
 
   frames.forEach(f => {
@@ -2975,16 +2975,15 @@ function renderPondMap(){
     let fill, stroke = 'none', lines, tip;
 
     if(isNonPond){
-      const tone = MAP_NONPOND_TONES[p.color] || {fill:'#ece6d3', text:'#7d7459'};
       const label = p.type === 'canal' ? 'คลอง ' + p.label : (p.label || p.id);
-      fill = tone.fill;
-      lines = [{t:label, s:Math.max(Math.min(10, pw / 3.2), 7), w:500, c:tone.text}];
+      fill = p.color;
+      lines = [{t:label, s:Math.max(Math.min(10, pw / 3.2), 7), w:600, c:MAP_NONPOND_TEXT[p.color] || '#1f2622'}];
       tip = label;
     } else {
-      fill = isActive ? '#0f6e56' : '#ffffff';
-      stroke = isActive ? 'none' : '#cfd6d2';
-      const main = isActive ? '#ffffff' : '#3f4b45';
-      const sub = isActive ? 'rgba(255,255,255,0.86)' : '#7a8680';
+      fill = isActive ? p.color : '#d9d9d9';
+      stroke = isActive ? '#111111' : 'rgba(0,0,0,0.18)';
+      const main = isActive ? '#1f2622' : '#6b7280';
+      const sub = isActive ? '#1d4ed8' : '#8a9099';
       const areaText = pond.area != null ? pond.area + ' ไร่' : null;
       const doc = isActive && cycle.releaseDate
         ? Math.round((new Date(today + ' 00:00:00') - new Date(cycle.releaseDate + ' 00:00:00')) / 86400000)
@@ -3011,7 +3010,7 @@ function renderPondMap(){
     svg += `<clipPath id="${clipId}"><rect x="${px + 1}" y="${py + 1}" width="${pw - 2}" height="${ph - 2}"/></clipPath>`;
     svg += `<g ${isNonPond ? '' : `class="pm-tile ${isActive ? 'active' : 'idle'}" onclick="openPondDetail('${p.id}')" style="cursor:pointer;"`}>
       <title>${tip}</title>
-      <rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="5" fill="${fill}" stroke="${stroke}" stroke-width="1"/>
+      <rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="5" fill="${fill}" opacity="${isNonPond || isActive ? 1 : 0.55}" stroke="${stroke}" stroke-width="${isActive ? 3 : 1}"/>
       ${textHtml}
     </g>`;
   });
