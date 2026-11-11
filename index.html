@@ -1416,6 +1416,14 @@ function getCurrentCycle(pondId){
   const cycles = getPondCycles(pondId);
   return cycles.length ? cycles[cycles.length - 1] : null;
 }
+// วันปล่อยของรอบที่ครอบคลุมวันที่นี้ ('' = ไม่ทราบ ไม่กรอง) ใช้กันข้อมูลรอบเก่าปนรอบใหม่
+function cycleStartFor(pondId, date){
+  let start = '';
+  getPondCycles(pondId).forEach(c=>{
+    if(c.releaseDate && c.releaseDate <= date && c.releaseDate > start) start = c.releaseDate;
+  });
+  return start;
+}
 function getCycleById(cycleId){
   if(!cycleId || !STATE.pondCycles) return null;
   for(const pondId in STATE.pondCycles){
@@ -1655,7 +1663,7 @@ let _pauseSnapshotUntil = 0;
 
 // ── ป้องกันเครื่องที่เปิดเวอร์ชันเก่าค้างไว้บันทึกทับข้อมูล ──
 // เพิ่มเลขนี้ทุกครั้งที่ deploy — เครื่องที่ใช้เวอร์ชันต่ำกว่า minAppVersion บนคลาวด์จะบันทึกไม่ได้และถูกให้รีเฟรช
-const APP_VERSION = 2026103102;
+const APP_VERSION = 2026111101;
 let _appOutdated = false;
 function checkAppVersion(data){
   if(!data || !(data.minAppVersion > APP_VERSION) || _appOutdated) return;
@@ -2536,7 +2544,9 @@ function renderGrowthTab(){
 
 function loadPondGrowthInfo(){
   const pondId = document.getElementById('growthPond').value;
-  const history = STATE.growthRecords.filter(r=>r.pondId===pondId).sort((a,b)=> a.date < b.date ? 1 : -1);
+  const growthDate = document.getElementById('growthDate').value || todayStr();
+  const cycleStart = cycleStartFor(pondId, growthDate);
+  const history = STATE.growthRecords.filter(r=>r.pondId===pondId && r.date>=cycleStart).sort((a,b)=> a.date < b.date ? 1 : -1);
   const infoEl = document.getElementById('prevWeighInfo');
   if(history.length>0){
     const last = history[0];
@@ -2545,7 +2555,6 @@ function loadPondGrowthInfo(){
     infoEl.textContent = `ยังไม่มีประวัติการชั่งของบ่อ ${pondId}`;
   }
 
-  const growthDate = document.getElementById('growthDate').value || todayStr();
   const ps2 = getCurrentCycle(pondId);
 
   // คำนวณอาหารสะสม: ใช้ accFeed รอบสุ่มก่อนหน้าเป็นฐาน + อาหารที่บันทึกหลังจากนั้น
@@ -2633,7 +2642,8 @@ function calcGrowth(){
     let pdg = null;
     const currentDate = document.getElementById('growthDate').value;
     if(currentDate){
-      const history = STATE.growthRecords.filter(r=>r.pondId===pondId && r.date<currentDate).sort((a,b)=>a.date<b.date?1:-1);
+      const cycleStart = cycleStartFor(pondId, currentDate);
+      const history = STATE.growthRecords.filter(r=>r.pondId===pondId && r.date<currentDate && r.date>=cycleStart).sort((a,b)=>a.date<b.date?1:-1);
       if(history.length>0){
         const last = history[0];
         const days = Math.round((new Date(currentDate)-new Date(last.date))/86400000);
@@ -2655,7 +2665,8 @@ function calcGrowth(){
     const feedRate = lookupFeedRate(mbw); // kg per 100,000 shrimp
     // estimate population: use last growth record's population estimate if not available, fallback null
     let population = null;
-    const history2 = STATE.growthRecords.filter(r=>r.pondId===pondId).sort((a,b)=> a.date < b.date ? 1 : -1);
+    const cycleStart2 = cycleStartFor(pondId, currentDate || todayStr());
+    const history2 = STATE.growthRecords.filter(r=>r.pondId===pondId && r.date>=cycleStart2).sort((a,b)=> a.date < b.date ? 1 : -1);
     if(history2.length>0 && history2[0].population) population = history2[0].population;
     if(population){
       const feedKg = (feedRate/100000) * population;
@@ -2678,8 +2689,9 @@ function round2(n){
   return Math.round(n*100)/100;
 }
 function calcPDG(rec, allRecords){
+  const cycleStart = cycleStartFor(rec.pondId, rec.date);
   const prev = allRecords
-    .filter(r=>r.pondId===rec.pondId && r.date<rec.date)
+    .filter(r=>r.pondId===rec.pondId && r.date<rec.date && r.date>=cycleStart)
     .sort((a,b)=>a.date<b.date?1:-1)[0];
   if(!prev) return null;
   const days = Math.round((new Date(rec.date)-new Date(prev.date))/86400000);
@@ -6257,7 +6269,7 @@ function renderFeedCeilingTab(){
   const today = todayStr();
   const rows = getActivePonds().map(p=>{
     const ps = getCurrentCycle(p.id);
-    const g = (STATE.growthRecords||[]).filter(r=>r.pondId===p.id && r.mbw && r.date<=today)
+    const g = (STATE.growthRecords||[]).filter(r=>r.pondId===p.id && r.mbw && r.date<=today && r.date>=(ps.releaseDate||''))
       .sort((a,b)=>a.date<b.date?1:-1)[0];
     let age = null;
     if(ps.releaseDate) age = Math.round((new Date(today)-new Date(ps.releaseDate))/86400000)+1;
@@ -6344,15 +6356,16 @@ function getEffectivePop(ps, feedDate){
 function showFeedChart(pondId){
   document.getElementById('feedChartTitle').textContent = pondId;
   document.getElementById('feedChartModal').style.display = 'flex';
+  const ps = getCurrentCycle(pondId);
+  const releaseDate = ps && ps.releaseDate ? ps.releaseDate : null;
+  const cycleStart = releaseDate || '';
   const records = STATE.feedRecords
-    .filter(r=>r.entries && r.entries[pondId] !== undefined)
+    .filter(r=>r.entries && r.entries[pondId] !== undefined && r.date >= cycleStart)
     .sort((a,b)=>a.date<b.date?-1:1)
     .slice(-30);
   const hint = document.getElementById('feedChartHint');
-  const ps = getCurrentCycle(pondId);
-  const releaseDate = ps && ps.releaseDate ? ps.releaseDate : null;
   const growthForPond = (STATE.growthRecords || [])
-    .filter(r => r.pondId === pondId && r.mbw)
+    .filter(r => r.pondId === pondId && r.mbw && r.date >= cycleStart)
     .sort((a,b) => a.date < b.date ? -1 : 1);
   function getLatestMbw(upToDate){
     let m = null;
@@ -6363,7 +6376,7 @@ function showFeedChart(pondId){
     hint.textContent = 'ยังไม่มีข้อมูลอาหาร — แสดงค่าที่คำนวณได้สำหรับวันนี้';
     if(_feedChart){ _feedChart.destroy(); _feedChart = null; }
   }
-  const lastRecDate = records[records.length-1].date;
+  const lastRecDate = records.length ? records[records.length-1].date : todayStr();
   const futureDates = [];
   for(let i=1;i<=5;i++){
     const d = new Date(lastRecDate+'T00:00:00'); d.setDate(d.getDate()+i);
@@ -6383,7 +6396,7 @@ function showFeedChart(pondId){
     ...futureDates.map(d=>lookupFeedCeiling(releaseDate, d, getEffectivePop(ps, d), getLatestMbw(d)))
   ];
   const hasCeiling = ceiling.some(v=>v!==null);
-  hint.textContent = `แสดงข้อมูล ${records.length} วันล่าสุด + พยากรณ์ 5 วันถัดไป` + (hasCeiling ? '' : ' (ไม่มีข้อมูลวันปล่อย/จำนวนกุ้ง)');
+  if(records.length) hint.textContent = `แสดงข้อมูล ${records.length} วันล่าสุด + พยากรณ์ 5 วันถัดไป` + (hasCeiling ? '' : ' (ไม่มีข้อมูลวันปล่อย/จำนวนกุ้ง)');
 
   // ── stats cards ──
   const statsEl = document.getElementById('feedChartStats');
@@ -6391,7 +6404,7 @@ function showFeedChart(pondId){
   const effPop = getEffectivePop(ps, today);
   const cardStyle = 'border-radius:10px;padding:10px 14px;';
   const latestGrowthWithFeed = (STATE.growthRecords||[])
-    .filter(r=>r.pondId===pondId && r.accFeed!=null)
+    .filter(r=>r.pondId===pondId && r.accFeed!=null && r.date>=cycleStart)
     .sort((a,b)=>a.date<b.date?1:-1)[0];
   let totalFeed;
   if(latestGrowthWithFeed){
@@ -6401,7 +6414,7 @@ function showFeedChart(pondId){
         ?s+(parseFloat(r.entries[pondId])||0):s,0);
     totalFeed = base + feedAfter;
   } else {
-    totalFeed = STATE.feedRecords.reduce((s,r)=>s+((r.entries&&r.entries[pondId]!==undefined)?parseFloat(r.entries[pondId])||0:0),0);
+    totalFeed = STATE.feedRecords.reduce((s,r)=>s+((r.date>=cycleStart&&r.entries&&r.entries[pondId]!==undefined)?parseFloat(r.entries[pondId])||0:0),0);
   }
   let statsHtml = '';
 
