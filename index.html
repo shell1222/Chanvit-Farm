@@ -22,6 +22,14 @@ function syncScrollPadding(){
 }
 window.addEventListener('load', syncScrollPadding);
 window.addEventListener('resize', syncScrollPadding);
+// เลื่อนให้ด้านบนของ el อยู่ใต้แถบหัวพอดี (คำนวณเอง เพราะ Safari บน iPhone ไม่สน scroll-padding)
+function scrollBelowTopbar(el){
+  if(!el) return;
+  const bar = document.querySelector('.topbar');
+  const offset = (bar ? bar.getBoundingClientRect().height : 0) + 12;
+  const top = el.getBoundingClientRect().top + window.pageYOffset - offset;
+  window.scrollTo({top: Math.max(0, top), behavior: 'smooth'});
+}
 
   const firebaseConfig = {
     apiKey: "AIzaSyC5frSLzd81k3vP5_U8jynww2hL2Cti-Og",
@@ -521,7 +529,8 @@ window.addEventListener('resize', syncScrollPadding);
   /* ให้ scrollIntoView หยุดใต้แถบหัวที่ติดด้านบน (JS ตั้งค่าจริงตามความสูงแถบหัว) */
   html{scroll-padding-top:96px;}
   /* iOS: ช่องวันที่ไม่ยอมหดตาม width:100% จนล้นการ์ด */
-  input[type="date"]{-webkit-appearance:none;appearance:none;min-width:0;display:block;}
+  input[type="date"]{-webkit-appearance:none;appearance:none;box-sizing:border-box;width:100%;max-width:100%;min-width:0;display:block;min-height:40px;}
+  input[type="date"]::-webkit-date-and-time-value{text-align:left;}
 </style>
 </head>
 <body>
@@ -3183,8 +3192,7 @@ function openPondDetail(pondId){
     document.getElementById('closeNote').value = status.note ?? '';
   }
 
-  syncScrollPadding();
-  document.getElementById('pondDetailCard').scrollIntoView({behavior:'smooth'});
+  scrollBelowTopbar(document.getElementById('pondDetailCard'));
 }
 
 function savePondCaretaker(){
