@@ -15,6 +15,14 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
+// ความสูงแถบหัวที่ติดด้านบน → ระยะเผื่อเวลาเลื่อนไปหาการ์ด
+function syncScrollPadding(){
+  const bar = document.querySelector('.topbar');
+  if(bar && bar.offsetHeight) document.documentElement.style.scrollPaddingTop = (bar.offsetHeight + 12) + 'px';
+}
+window.addEventListener('load', syncScrollPadding);
+window.addEventListener('resize', syncScrollPadding);
+
   const firebaseConfig = {
     apiKey: "AIzaSyC5frSLzd81k3vP5_U8jynww2hL2Cti-Og",
     authDomain: "chanvit-farm.firebaseapp.com",
@@ -510,6 +518,10 @@
     font-weight:700;color:var(--primary-dark);white-space:nowrap;font-size:13px;
     background:var(--primary-light);padding:3px 8px;border-radius:999px;
   }
+  /* ให้ scrollIntoView หยุดใต้แถบหัวที่ติดด้านบน (JS ตั้งค่าจริงตามความสูงแถบหัว) */
+  html{scroll-padding-top:96px;}
+  /* iOS: ช่องวันที่ไม่ยอมหดตาม width:100% จนล้นการ์ด */
+  input[type="date"]{-webkit-appearance:none;appearance:none;min-width:0;display:block;}
 </style>
 </head>
 <body>
@@ -3171,6 +3183,7 @@ function openPondDetail(pondId){
     document.getElementById('closeNote').value = status.note ?? '';
   }
 
+  syncScrollPadding();
   document.getElementById('pondDetailCard').scrollIntoView({behavior:'smooth'});
 }
 
