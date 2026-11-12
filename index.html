@@ -731,7 +731,7 @@
     </div>
 
     <div class="card" id="pondDetailCard" style="display:none;">
-      <h2><i class="ti ti-info-circle"></i> รายละเอียดบ่อ <span id="pondDetailTitle"></span></h2>
+      <h2><i class="ti ti-info-circle"></i> รายละเอียดบ่อ <span id="pondDetailTitle"></span><span id="pondDetailDoc" style="margin-left:auto;font-size:13px;font-weight:500;color:#9aa3a0;white-space:nowrap;"></span></h2>
       <div class="field">
         <label>ผู้ดูแลบ่อ</label>
         <input type="text" id="pondCaretaker" placeholder="ชื่อผู้ดูแลบ่อ" onchange="savePondCaretaker()">
@@ -752,7 +752,7 @@
       <div id="pondActiveFields" style="display:none;">
         <div class="section-title">ข้อมูลการปล่อยลูกกุ้ง</div>
         <div class="row2">
-          <div class="field"><label>วันที่ปล่อย</label><input type="date" id="activeReleaseDate" oninput="calcPartialDoc('active',1);calcPartialDoc('active',2)"></div>
+          <div class="field"><label>วันที่ปล่อย</label><input type="date" id="activeReleaseDate" oninput="calcPartialDoc('active',1);calcPartialDoc('active',2);updatePondDetailDoc()"></div>
           <div class="field"><label>ประเภทลูกกุ้ง</label><input type="text" id="activeFromPond"></div>
         </div>
         <div class="row2">
@@ -3085,6 +3085,17 @@ function renderPondStatusTab(){
   selectedPondId = null;
 }
 
+// อายุกุ้ง (วันนับจากวันปล่อย) แสดงจางๆ ที่หัวการ์ดรายละเอียดบ่อ — เฉพาะรอบที่กำลังเลี้ยง
+function updatePondDetailDoc(){
+  const el = document.getElementById('pondDetailDoc');
+  if(!el) return;
+  const cycle = selectedPondId ? getCurrentCycle(selectedPondId) : null;
+  const release = document.getElementById('activeReleaseDate')?.value || (cycle && cycle.releaseDate);
+  if(!cycle || cycle.status === 'closed' || !release){ el.textContent = ''; return; }
+  const days = Math.round((new Date(todayStr() + ' 00:00:00') - new Date(release + ' 00:00:00')) / 86400000);
+  el.textContent = days >= 0 ? `อายุกุ้ง ${days} วัน` : '';
+}
+
 function openPondDetail(pondId){
   if(currentRole()==='user'){ showToast('ไม่มีสิทธิ์ดูรายละเอียดบ่อ'); return; }
   selectedPondId = pondId;
@@ -3126,6 +3137,7 @@ function openPondDetail(pondId){
     document.getElementById('activePartial2Price').value = status.partial2Price ?? '';
     calcPartialDoc('active',1); calcPartialDoc('active',2);
   }
+  updatePondDetailDoc();
 
   if(status.status==='closed'){
     document.getElementById('closeDate').value = status.closeDate ?? '';
