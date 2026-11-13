@@ -75,11 +75,11 @@ function load(){
 
 /* ---------- ตารางตามประเภทรายงาน ---------- */
 const RENDER = {
-  cp_water(rep){ const c=C.cpWater, T=(k,r)=>v=>c[k](v,r);
+  cp_water(rep){ const c=C.cpWater, T=(k,r)=>v=>c[k](v,r), rm=rep.rows.some(r=>r.remark);
     return `<div class="lab-tw"><table class="lab-t"><thead>
-      <tr><th rowspan="2">บ่อ</th><th rowspan="2">อายุ<small>วัน</small></th><th class="lab-grp" colspan="9">คุณภาพน้ำ</th><th rowspan="2">ความขุ่นใส<small>NTU</small></th><th class="lab-grp" colspan="3">เชื้อในน้ำ <small>CFU/ml</small></th></tr>
+      <tr><th rowspan="2">บ่อ</th><th rowspan="2">อายุ<small>วัน</small></th><th class="lab-grp" colspan="9">คุณภาพน้ำ</th><th rowspan="2">ความขุ่นใส<small>NTU</small></th><th class="lab-grp" colspan="3">เชื้อในน้ำ <small>CFU/ml</small></th>${rm?'<th rowspan="2">หมายเหตุ</th>':''}</tr>
       <tr><th>ความเค็ม<small>ppt</small></th><th>pH</th><th>อัลคาไลน์</th><th>แอมโมเนีย</th><th>ไนไตรท์</th><th>แคลเซียม</th><th>แมกนีเซียม</th><th>โพแทสเซียม</th><th>สารอินทรีย์</th><th>เขียว GVC</th><th>เหลือง YVC</th><th>รวม TVC</th></tr></thead><tbody>`+
-      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td><td>${fix(r.age)}</td><td>${fix(r.salinity)}</td>${cell(r.ph,c.ph)}${cell(r.alk,c.alk)}${cell(r.nh3,c.nh3,fix(r.nh3,2))}${cell(r.no2,c.no2,fix(r.no2,2))}${cell(r.ca,T('ca',r))}${cell(r.mg,T('mg',r))}${cell(r.k,T('k',r))}${cell(r.om,T('om',r))}${cell(r.ntu,T('ntu',r),fix(r.ntu,2))}${cell(r.gvc,c.g,sci(r.gvc),'lab-v')}${cell(r.yvc,c.y,sci(r.yvc),'lab-v')}${cell(r.tvc,c.t,sci(r.tvc),'lab-v')}</tr>`).join('')+
+      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td><td>${fix(r.age)}</td><td>${fix(r.salinity)}</td>${cell(r.ph,c.ph)}${cell(r.alk,c.alk)}${cell(r.nh3,c.nh3,fix(r.nh3,2))}${cell(r.no2,c.no2,fix(r.no2,2))}${cell(r.ca,T('ca',r))}${cell(r.mg,T('mg',r))}${cell(r.k,T('k',r))}${cell(r.om,T('om',r))}${cell(r.ntu,T('ntu',r),fix(r.ntu,2))}${cell(r.gvc,c.g,sci(r.gvc),'lab-v')}${cell(r.yvc,c.y,sci(r.yvc),'lab-v')}${cell(r.tvc,c.t,sci(r.tvc),'lab-v')}${rm?txtCell(r.remark):''}</tr>`).join('')+
       `</tbody></table></div><p class="lab-crit">เกณฑ์ CP: pH 7.6–8.0 · อัลคาไลน์ ≥ 120 · แอมโมเนีย ≤ 1 · ไนไตรท์ ≤ 1 · Ca/Mg/K ตามความเค็ม (≤10: 100/100/100 · 11–20: 200/400/200 · &gt;20: 300/600/300) · สารอินทรีย์ ≤ 10 · ความขุ่น ≤ 10 NTU (บ่อพักน้ำ &lt; 1) · เชื้อเขียว &lt; 10<sup>2</sup> · เหลือง &lt; 10<sup>3</sup> · รวม &lt; 1.1×10<sup>3</sup></p>`;
   },
   cp_shrimp(rep){ const c=C.cpShrimp;
