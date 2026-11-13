@@ -125,7 +125,7 @@ const RENDER = {
   },
   unity_health(rep){ const c=C.health;
     return `<div class="lab-tw"><table class="lab-t"><thead><tr><th>บ่อ</th><th>ระดับไขมัน</th><th>พูตับ / ผนังตับ</th><th>ATM</th><th>เมลานิน</th><th>ตัวอ่อน EHP</th><th>สปอร์ EHP</th><th>ลำไส้</th><th>เหงือก / ภายนอก</th><th>คำแนะนำ</th></tr></thead><tbody>`+
-      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td>${txtCell(r.fat, parseInt(r.fat)<80)}<td class="lab-wrap ${BAD_LIVER_TXT.test(r.liver||'')?'lab-bad':''}">${esc(r.liver||'–')}</td>${cell(r.atm,c.atm,pct(r.atm))}${cell(r.melanin,null,pct(r.melanin))}${cell(r.ehp,c.ehp,pct(r.ehp))}${cell(r.spore,c.spore,pct(r.spore))}${txtCell(r.gut, r.gut==='อักเสบ')}${txtCell(r.outside, !!r.outside)}<td class="lab-wrap">${esc(r.advice||'–')}</td></tr>`).join('')+
+      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td>${txtCell(r.fat, parseInt(r.fat)<80)}<td class="lab-wrap ${BAD_LIVER_TXT.test(r.liver||'')?'lab-bad':''}">${esc(r.liver||'–')}</td>${cell(r.atm,c.atm,pct(r.atm))}${cell(r.melanin,null,pct(r.melanin))}${cell(r.ehp,c.ehp,pct(r.ehp))}${cell(r.spore,c.spore,pct(r.spore))}${txtCell(r.gut, /อักเสบ/.test(r.gut||''))}${txtCell(r.outside, !!r.outside)}<td class="lab-wrap">${esc(r.advice||'–')}</td></tr>`).join('')+
       `</tbody></table></div>`;
   },
   unity_plates(rep){
@@ -270,7 +270,7 @@ function pondView(){
     ['ฝ่อ/คอด · พูตับ', x=>x.liverTxt||pct(x.atrophy), x=>x.liverTxt?!BAD_LIVER_TXT.test(x.liverTxt):chk(x.atrophy,h.atrophy)],
     ['ตัวอ่อน EHP', x=>pct(x.ehp), x=>chk(x.ehp,h.ehp)],
     ['สปอร์ EHP', x=>pct(x.spore), x=>chk(x.spore,h.spore)],
-    ['ลำไส้อักเสบ', x=>x.gutTxt||pct(x.gut), x=>x.gutTxt?x.gutTxt!=='อักเสบ':chk(x.gut,h.gut)],
+    ['ลำไส้อักเสบ', x=>x.gutTxt||pct(x.gut), x=>x.gutTxt?!/อักเสบ/.test(x.gutTxt):chk(x.gut,h.gut)],
     ['ขาว่ายน้ำ', x=>x.leg||'–', ()=>null],
     ['เหงือก', x=>x.gill||'–', x=>x.gill?x.gill==='ปกติ':null],
   ];
@@ -314,7 +314,7 @@ function watchList(){
   const uh = latest('unify_health');
   if(uh) uh.rows.forEach(r=>{ if(r.atm!=null&&!C.health.atm(r.atm)) add(r.pond,'ATM '+r.atm+'%'); if(r.ehp!=null&&!C.health.ehp(r.ehp)) add(r.pond,'ตัวอ่อน EHP '+r.ehp+'%'); if(r.gut!=null&&!C.health.gut(r.gut)) add(r.pond,'ลำไส้อักเสบ '+r.gut+'%'); });
   const un = latest('unity_health');
-  if(un) un.rows.forEach(r=>{ const w=[]; if(r.atm!=null&&!C.health.atm(r.atm)) w.push('ATM '+r.atm+'%'); if(r.ehp!=null&&!C.health.ehp(r.ehp)) w.push('EHP '+r.ehp+'%'); if(r.gut==='อักเสบ') w.push('ลำไส้อักเสบ'); if(w.length) add(r.pond,'Unity: '+w.join(' · ')); });
+  if(un) un.rows.forEach(r=>{ const w=[]; if(r.atm!=null&&!C.health.atm(r.atm)) w.push('ATM '+r.atm+'%'); if(r.ehp!=null&&!C.health.ehp(r.ehp)) w.push('EHP '+r.ehp+'%'); if(/อักเสบ/.test(r.gut||'')) w.push('ลำไส้'+(r.gut==='อักเสบ'?'อักเสบ':r.gut)); if(w.length) add(r.pond,'Unity: '+w.join(' · ')); });
   const list = Object.entries(why).sort((a,b)=>b[1].length-a[1].length);
   if(!list.length) return '<p class="hint">ทุกบ่อผ่านเกณฑ์</p>';
   return `<div class="lab-watch">`+list.map(([p,w])=>`<button class="lab-w" onclick="labGotoPond('${esc(p)}')"><span class="lab-pn">${esc(p)}</span><ul>${w.slice(0,4).map(t=>`<li>${esc(t)}</li>`).join('')}${w.length>4?`<li>อีก ${w.length-4} รายการ</li>`:''}</ul></button>`).join('')+`</div>`;
