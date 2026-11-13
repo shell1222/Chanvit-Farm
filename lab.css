@@ -66,3 +66,5 @@
 .lab-t-fit td:first-child{white-space:nowrap;}
 .lab-chart{width:100%;height:auto;display:block;margin:10px 0 6px;}
 .lab-chip-sm{padding:3px 10px;font-size:12px;}
+.lab-age-diff{display:block;font-size:10.5px;color:var(--warn);font-weight:600;}
+.lab-age-co{display:block;font-size:10.5px;color:var(--text-secondary);}
