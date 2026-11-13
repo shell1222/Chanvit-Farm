@@ -34,6 +34,26 @@ const C = {
 };
 // หาเกณฑ์ตามช่วง: [[สูงสุดของช่วง, ค่าเกณฑ์], ...]
 function byAge(x, bands){ if(x==null) return bands[0][1]; for(const [max,val] of bands) if(x<=max) return val; return bands[bands.length-1][1]; }
+// อายุกุ้งตามข้อมูลฟาร์ม (วันปล่อยในรอบเลี้ยงที่ครอบคลุมวันตรวจ) · null = วันนั้นไม่มีรอบเลี้ยงที่รู้วันปล่อย
+function farmAge(pond, date){
+  if(typeof getPondCycles !== 'function') return null;
+  let best = null;
+  getPondCycles(pond).forEach(c=>{
+    if(!c.releaseDate || c.releaseDate > date) return;
+    if(c.closeDate && c.closeDate < date) return;
+    if(!best || c.releaseDate > best.releaseDate) best = c;
+  });
+  if(!best) return null;
+  return Math.round((Date.parse(date+'T00:00:00Z') - Date.parse(best.releaseDate+'T00:00:00Z')) / 86400000);
+}
+// ช่องอายุ: แสดงอายุตามฟาร์ม ถ้าบริษัทเขียนต่างจากนี้ให้กำกับเลขของบริษัทไว้
+function ageCell(r, rep){
+  const ours = farmAge(r.pond, rep.date), theirs = r.age;
+  if(ours == null) return `<td class="${theirs==null?'lab-na':''}">${theirs==null?'–':esc(theirs)}${theirs!=null?'<small class="lab-age-co">บริษัท</small>':''}</td>`;
+  // ต่างกัน 1 วันไม่นับ (บางบริษัทนับวันปล่อยเป็นวันที่ 1)
+  const diff = theirs != null && Math.abs(theirs - ours) > 1;
+  return `<td>${ours}${diff?`<small class="lab-age-diff">บริษัท ${esc(theirs)}</small>`:''}</td>`;
+}
 const BAD_LIVER_TXT = /บวม|อักเสบ|30%/;
 
 let DATA = null, loading = null, curView = 'co', curCo = 'cp', curPond = null, curMetric = 'wY';
@@ -77,20 +97,20 @@ function load(){
 const RENDER = {
   cp_water(rep){ const c=C.cpWater, T=(k,r)=>v=>c[k](v,r), rm=rep.rows.some(r=>r.remark);
     return `<div class="lab-tw"><table class="lab-t"><thead>
-      <tr><th rowspan="2">บ่อ</th><th rowspan="2">อายุ<small>วัน</small></th><th class="lab-grp" colspan="9">คุณภาพน้ำ</th><th rowspan="2">ความขุ่นใส<small>NTU</small></th><th class="lab-grp" colspan="3">เชื้อในน้ำ <small>CFU/ml</small></th>${rm?'<th rowspan="2">หมายเหตุ</th>':''}</tr>
+      <tr><th rowspan="2">บ่อ</th><th rowspan="2">อายุ<small>วัน (ฟาร์ม)</small></th><th class="lab-grp" colspan="9">คุณภาพน้ำ</th><th rowspan="2">ความขุ่นใส<small>NTU</small></th><th class="lab-grp" colspan="3">เชื้อในน้ำ <small>CFU/ml</small></th>${rm?'<th rowspan="2">หมายเหตุ</th>':''}</tr>
       <tr><th>ความเค็ม<small>ppt</small></th><th>pH</th><th>อัลคาไลน์</th><th>แอมโมเนีย</th><th>ไนไตรท์</th><th>แคลเซียม</th><th>แมกนีเซียม</th><th>โพแทสเซียม</th><th>สารอินทรีย์</th><th>เขียว GVC</th><th>เหลือง YVC</th><th>รวม TVC</th></tr></thead><tbody>`+
-      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td><td>${fix(r.age)}</td><td>${fix(r.salinity)}</td>${cell(r.ph,c.ph)}${cell(r.alk,c.alk)}${cell(r.nh3,c.nh3,fix(r.nh3,2))}${cell(r.no2,c.no2,fix(r.no2,2))}${cell(r.ca,T('ca',r))}${cell(r.mg,T('mg',r))}${cell(r.k,T('k',r))}${cell(r.om,T('om',r))}${cell(r.ntu,T('ntu',r),fix(r.ntu,2))}${cell(r.gvc,c.g,sci(r.gvc),'lab-v')}${cell(r.yvc,c.y,sci(r.yvc),'lab-v')}${cell(r.tvc,c.t,sci(r.tvc),'lab-v')}${rm?txtCell(r.remark):''}</tr>`).join('')+
+      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td>${ageCell(r,rep)}<td>${fix(r.salinity)}</td>${cell(r.ph,c.ph)}${cell(r.alk,c.alk)}${cell(r.nh3,c.nh3,fix(r.nh3,2))}${cell(r.no2,c.no2,fix(r.no2,2))}${cell(r.ca,T('ca',r))}${cell(r.mg,T('mg',r))}${cell(r.k,T('k',r))}${cell(r.om,T('om',r))}${cell(r.ntu,T('ntu',r),fix(r.ntu,2))}${cell(r.gvc,c.g,sci(r.gvc),'lab-v')}${cell(r.yvc,c.y,sci(r.yvc),'lab-v')}${cell(r.tvc,c.t,sci(r.tvc),'lab-v')}${rm?txtCell(r.remark):''}</tr>`).join('')+
       `</tbody></table></div><p class="lab-crit">เกณฑ์ CP: pH 7.6–8.0 · อัลคาไลน์ ≥ 120 · แอมโมเนีย ≤ 1 · ไนไตรท์ ≤ 1 · Ca/Mg/K ตามความเค็ม (≤10: 100/100/100 · 11–20: 200/400/200 · &gt;20: 300/600/300) · สารอินทรีย์ ≤ 10 · ความขุ่น ≤ 10 NTU (บ่อพักน้ำ &lt; 1) · เชื้อเขียว &lt; 10<sup>2</sup> · เหลือง &lt; 10<sup>3</sup> · รวม &lt; 1.1×10<sup>3</sup></p>`;
   },
   cp_shrimp(rep){ const c=C.cpShrimp;
-    return `<div class="lab-tw"><table class="lab-t"><thead><tr><th>บ่อ</th><th>อายุ<small>วัน</small></th><th>เขียว GVC</th><th>เหลือง YVC</th><th>รวม TVC</th><th>น้ำหนักเฉลี่ย<small>กรัม/ตัว</small></th></tr></thead><tbody>`+
-      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td><td>${fix(r.age)}</td>${cell(r.gvc,c.g,sci(r.gvc),'lab-v')}${cell(r.yvc,c.y,sci(r.yvc),'lab-v')}${cell(r.tvc,c.t,sci(r.tvc),'lab-v')}${cell(r.weight)}</tr>`).join('')+
+    return `<div class="lab-tw"><table class="lab-t"><thead><tr><th>บ่อ</th><th>อายุ<small>วัน (ฟาร์ม)</small></th><th>เขียว GVC</th><th>เหลือง YVC</th><th>รวม TVC</th><th>น้ำหนักเฉลี่ย<small>กรัม/ตัว</small></th></tr></thead><tbody>`+
+      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td>${ageCell(r,rep)}${cell(r.gvc,c.g,sci(r.gvc),'lab-v')}${cell(r.yvc,c.y,sci(r.yvc),'lab-v')}${cell(r.tvc,c.t,sci(r.tvc),'lab-v')}${cell(r.weight)}</tr>`).join('')+
       `</tbody></table></div><p class="lab-crit">เกณฑ์ CP: GVC &lt; 10<sup>2</sup> · YVC &lt; 10<sup>3</sup> · TVC &lt; 1.1×10<sup>3</sup> CFU/ml</p>`;
   },
   unify_health(rep){ const c=C.health;
-    return `<div class="lab-tw"><table class="lab-t"><thead><tr><th rowspan="2">บ่อ</th><th rowspan="2">อายุ</th><th rowspan="2">ไซส์<small>ตัว/กก.</small></th><th rowspan="2">นน.เฉลี่ย<small>กรัม</small></th><th rowspan="2">PDG<small>ก./วัน</small></th><th class="lab-grp" colspan="7">ตับ</th><th rowspan="2">ขาว่ายน้ำ</th><th rowspan="2">เหงือก</th></tr>
+    return `<div class="lab-tw"><table class="lab-t"><thead><tr><th rowspan="2">บ่อ</th><th rowspan="2">อายุ<small>วัน (ฟาร์ม)</small></th><th rowspan="2">ไซส์<small>ตัว/กก.</small></th><th rowspan="2">นน.เฉลี่ย<small>กรัม</small></th><th rowspan="2">PDG<small>ก./วัน</small></th><th class="lab-grp" colspan="7">ตับ</th><th rowspan="2">ขาว่ายน้ำ</th><th rowspan="2">เหงือก</th></tr>
       <tr><th>% ไขมัน</th><th>ATM</th><th>ฝ่อ/คอด</th><th>รอยอักเสบ</th><th>ตัวอ่อน EHP</th><th>สปอร์ EHP</th><th>ลำไส้อักเสบ</th></tr></thead><tbody>`+
-      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td><td>${fix(r.age)}</td><td>${r.size!=null?r.size.toLocaleString():'–'}</td><td>${fix(r.weight,2)}</td>${cell(r.pdg,null,fix(r.pdg,2))}${cell(r.fat,c.fat,pct(r.fat))}${cell(r.atm,c.atm,pct(r.atm))}${cell(r.atrophy,c.atrophy,pct(r.atrophy))}${cell(r.lesion,null,pct(r.lesion))}${cell(r.ehp,c.ehp,pct(r.ehp))}${cell(r.spore,c.spore,pct(r.spore))}${cell(r.gut,c.gut,pct(r.gut))}${txtCell(r.leg)}${txtCell(r.gill, r.gill && r.gill!=='ปกติ')}</tr>`).join('')+
+      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td>${ageCell(r,rep)}<td>${r.size!=null?r.size.toLocaleString():'–'}</td><td>${fix(r.weight,2)}</td>${cell(r.pdg,null,fix(r.pdg,2))}${cell(r.fat,c.fat,pct(r.fat))}${cell(r.atm,c.atm,pct(r.atm))}${cell(r.atrophy,c.atrophy,pct(r.atrophy))}${cell(r.lesion,null,pct(r.lesion))}${cell(r.ehp,c.ehp,pct(r.ehp))}${cell(r.spore,c.spore,pct(r.spore))}${cell(r.gut,c.gut,pct(r.gut))}${txtCell(r.leg)}${txtCell(r.gill, r.gill && r.gill!=='ปกติ')}</tr>`).join('')+
       `</tbody></table></div><p class="lab-crit">เกณฑ์ตั้งต้น: ไขมัน ≥ 80% · ATM ≤ 10% · ฝ่อ/คอด ≤ 10% · ตัวอ่อน EHP ≤ 10% · ลำไส้อักเสบ ≤ 10%</p>`;
   },
   unify_tcbs(rep){
@@ -99,8 +119,8 @@ const RENDER = {
       `</tbody></table></div><p class="lab-crit">เกณฑ์ Unify: ในน้ำ ≤ 10<sup>3</sup> CFU/ml · ในตับ ≤ 10<sup>5</sup> CFU/g</p>`;
   },
   unify_pond(rep){ const c=C.health;
-    return `<div class="lab-tw"><table class="lab-t"><thead><tr><th>บ่อ</th><th>อายุ</th><th>นน.เฉลี่ย</th><th>ไซส์</th><th>% ไขมัน</th><th>ATM</th><th>ฝ่อ/คอด</th><th>ไขมันเป็นก้อน</th><th>รอยอักเสบ</th><th>ตัวอ่อน EHP</th><th>สปอร์ EHP</th><th>ลำไส้อักเสบ</th><th>เหงือก</th><th>ขาว่ายน้ำ</th></tr></thead><tbody>`+
-      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td><td>${fix(r.age)}</td><td>${fix(r.weight,2)}</td><td>${fix(r.size)}</td>${cell(r.fat,c.fat,pct(r.fat))}${cell(r.atm,c.atm,pct(r.atm))}${cell(r.atrophy,c.atrophy,pct(r.atrophy))}${cell(r.fatLump,null,pct(r.fatLump))}${cell(r.lesion,null,pct(r.lesion))}${cell(r.ehp,c.ehp,pct(r.ehp))}${cell(r.spore,c.spore,pct(r.spore))}${cell(r.gut,c.gut,pct(r.gut))}${txtCell(r.gill, r.gill && r.gill!=='ปกติ')}${txtCell(r.leg)}</tr>`).join('')+
+    return `<div class="lab-tw"><table class="lab-t"><thead><tr><th>บ่อ</th><th>อายุ<small>วัน (ฟาร์ม)</small></th><th>นน.เฉลี่ย</th><th>ไซส์</th><th>% ไขมัน</th><th>ATM</th><th>ฝ่อ/คอด</th><th>ไขมันเป็นก้อน</th><th>รอยอักเสบ</th><th>ตัวอ่อน EHP</th><th>สปอร์ EHP</th><th>ลำไส้อักเสบ</th><th>เหงือก</th><th>ขาว่ายน้ำ</th></tr></thead><tbody>`+
+      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td>${ageCell(r,rep)}<td>${fix(r.weight,2)}</td><td>${fix(r.size)}</td>${cell(r.fat,c.fat,pct(r.fat))}${cell(r.atm,c.atm,pct(r.atm))}${cell(r.atrophy,c.atrophy,pct(r.atrophy))}${cell(r.fatLump,null,pct(r.fatLump))}${cell(r.lesion,null,pct(r.lesion))}${cell(r.ehp,c.ehp,pct(r.ehp))}${cell(r.spore,c.spore,pct(r.spore))}${cell(r.gut,c.gut,pct(r.gut))}${txtCell(r.gill, r.gill && r.gill!=='ปกติ')}${txtCell(r.leg)}</tr>`).join('')+
       `</tbody></table></div>`;
   },
   unity_health(rep){ const c=C.health;
@@ -259,9 +279,10 @@ function pondView(){
     `</tbody></table></div>`:'<p class="hint">ยังไม่มีผล</p>')+`</div>`);
 
   const g = cols.filter(x=>x.weight!=null);
-  const age = (cs||cw||{}).age, ageRep = cs?csRep:cwRep;
-  out.push(`<div class="card"><h3>การเติบโต</h3><div class="lab-tiles">`+
-    (age!=null?tile('อายุ',age,'วัน',null,'CP · '+thDate(ageRep.date)):'')+
+  const today = new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const age = farmAge(p, today);
+  out.push(`<div class="card"><h3>การเติบโต <span class="lab-date">น้ำหนัก/ไซส์จากบริษัท ใช้ดูประกอบ</span></h3><div class="lab-tiles">`+
+    (age!=null?tile('อายุวันนี้',age,'วัน',null,'ตามวันปล่อยในข้อมูลฟาร์ม'):'')+
     g.map(x=>tile('น้ำหนักเฉลี่ย',x.weight,'กรัม',null,x.n+' · '+thDate(x.d))+(x.size!=null?tile('ไซส์',x.size.toLocaleString(),'ตัว/กก.',null,x.n+' · '+thDate(x.d)):'')+(x.pdg!=null?tile('PDG',x.pdg,'ก./วัน',null,x.n+' · '+thDate(x.d)):'')).join('')+
     `</div>${!g.length&&age==null?'<p class="hint">ยังไม่มีผล</p>':''}</div>`);
 
