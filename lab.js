@@ -17,11 +17,23 @@ const TYPE_ORDER = ['cp_water','cp_shrimp','unify_health','unify_tcbs','unify_po
 
 // เกณฑ์: เชื้อใช้ตามที่แต่ละบริษัทระบุ / สีในรายงาน CP · สุขภาพตับเป็นค่าตั้งต้น ปรับได้ที่นี่
 const C = {
-  cpWater:{alk:v=>v>=120, nh3:v=>v<=1, no2:v=>v<=0.5, om:v=>v<=10, ntu:v=>v>=4&&v<=10, y:v=>v<1000, g:v=>v<100, t:v=>v<1100},
+  // ตามเกณฑ์ท้ายรายงานคุณภาพน้ำของ CP · r = แถวของบ่อ (ใช้อายุกุ้งและความเค็ม) · อายุ 0 = บ่อพักน้ำ
+  cpWater:{
+    ph:v=>v>=7.6&&v<=8.0, alk:v=>v>=120, nh3:v=>v<=1, no2:v=>v<=1,
+    ca:(v,r)=>v>=byAge(r.salinity,[[10,100],[20,200],[Infinity,300]]),
+    mg:(v,r)=>v>=byAge(r.salinity,[[10,100],[20,400],[Infinity,600]]),
+    k:(v,r)=>v>=byAge(r.salinity,[[10,100],[20,200],[Infinity,300]]),
+    // สารอินทรีย์/ความขุ่น: ใช้ตามสีที่ CP ระบายจริง (≤10) แม้ท้ายรายงานจะผ่อนตามอายุ (≤15 / ≤20 NTU เมื่ออายุ 31–60 วัน)
+    // ถ้าจะใช้แบบตามอายุ เปลี่ยนเป็น byAge(r.age,[[30,10],[60,15],[Infinity,20]]) และ byAge(r.age,[[30,10],[60,20],[Infinity,30]])
+    om:(v,r)=>v<=10,
+    ntu:(v,r)=>r.age===0 ? v<1 : v<=10,
+    y:v=>v<1000, g:v=>v<100, t:v=>v<1100},
   cpShrimp:{g:v=>v<100, y:v=>v<1000, t:v=>v<1100},
   unifyWater:v=>v<=1000, unifyLiver:v=>v<=100000,
   health:{fat:v=>v>=80, atm:v=>v<=10, ehp:v=>v<=10, spore:v=>v<=0, gut:v=>v<=10, atrophy:v=>v<=10},
 };
+// หาเกณฑ์ตามช่วง: [[สูงสุดของช่วง, ค่าเกณฑ์], ...]
+function byAge(x, bands){ if(x==null) return bands[0][1]; for(const [max,val] of bands) if(x<=max) return val; return bands[bands.length-1][1]; }
 const BAD_LIVER_TXT = /บวม|อักเสบ|30%/;
 
 let DATA = null, loading = null, curView = 'co', curCo = 'cp', curPond = null;
@@ -63,12 +75,12 @@ function load(){
 
 /* ---------- ตารางตามประเภทรายงาน ---------- */
 const RENDER = {
-  cp_water(rep){ const c=C.cpWater;
+  cp_water(rep){ const c=C.cpWater, T=(k,r)=>v=>c[k](v,r);
     return `<div class="lab-tw"><table class="lab-t"><thead>
       <tr><th rowspan="2">บ่อ</th><th rowspan="2">อายุ<small>วัน</small></th><th class="lab-grp" colspan="9">คุณภาพน้ำ</th><th rowspan="2">ความขุ่นใส<small>NTU</small></th><th class="lab-grp" colspan="3">เชื้อในน้ำ <small>CFU/ml</small></th></tr>
       <tr><th>ความเค็ม<small>ppt</small></th><th>pH</th><th>อัลคาไลน์</th><th>แอมโมเนีย</th><th>ไนไตรท์</th><th>แคลเซียม</th><th>แมกนีเซียม</th><th>โพแทสเซียม</th><th>สารอินทรีย์</th><th>เขียว GVC</th><th>เหลือง YVC</th><th>รวม TVC</th></tr></thead><tbody>`+
-      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td><td>${fix(r.age)}</td><td>${fix(r.salinity)}</td>${cell(r.ph)}${cell(r.alk,c.alk)}${cell(r.nh3,c.nh3,fix(r.nh3,2))}${cell(r.no2,c.no2,fix(r.no2,2))}${cell(r.ca)}${cell(r.mg)}${cell(r.k)}${cell(r.om,c.om)}${cell(r.ntu,c.ntu,fix(r.ntu,2))}${cell(r.gvc,c.g,sci(r.gvc),'lab-v')}${cell(r.yvc,c.y,sci(r.yvc),'lab-v')}${cell(r.tvc,c.t,sci(r.tvc),'lab-v')}</tr>`).join('')+
-      `</tbody></table></div><p class="lab-crit">เกณฑ์ (อ่านจากสีในรายงาน CP): อัลคาไลน์ ≥ 120 · สารอินทรีย์ ≤ 10 · ความขุ่น 4–10 NTU · เชื้อเหลือง &lt; 10<sup>3</sup> · เชื้อเขียว &lt; 10<sup>2</sup></p>`;
+      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td><td>${fix(r.age)}</td><td>${fix(r.salinity)}</td>${cell(r.ph,c.ph)}${cell(r.alk,c.alk)}${cell(r.nh3,c.nh3,fix(r.nh3,2))}${cell(r.no2,c.no2,fix(r.no2,2))}${cell(r.ca,T('ca',r))}${cell(r.mg,T('mg',r))}${cell(r.k,T('k',r))}${cell(r.om,T('om',r))}${cell(r.ntu,T('ntu',r),fix(r.ntu,2))}${cell(r.gvc,c.g,sci(r.gvc),'lab-v')}${cell(r.yvc,c.y,sci(r.yvc),'lab-v')}${cell(r.tvc,c.t,sci(r.tvc),'lab-v')}</tr>`).join('')+
+      `</tbody></table></div><p class="lab-crit">เกณฑ์ CP: pH 7.6–8.0 · อัลคาไลน์ ≥ 120 · แอมโมเนีย ≤ 1 · ไนไตรท์ ≤ 1 · Ca/Mg/K ตามความเค็ม (≤10: 100/100/100 · 11–20: 200/400/200 · &gt;20: 300/600/300) · สารอินทรีย์ ≤ 10 · ความขุ่น ≤ 10 NTU (บ่อพักน้ำ &lt; 1) · เชื้อเขียว &lt; 10<sup>2</sup> · เหลือง &lt; 10<sup>3</sup> · รวม &lt; 1.1×10<sup>3</sup></p>`;
   },
   cp_shrimp(rep){ const c=C.cpShrimp;
     return `<div class="lab-tw"><table class="lab-t"><thead><tr><th>บ่อ</th><th>อายุ<small>วัน</small></th><th>เขียว GVC</th><th>เหลือง YVC</th><th>รวม TVC</th><th>น้ำหนักเฉลี่ย<small>กรัม/ตัว</small></th></tr></thead><tbody>`+
@@ -142,10 +154,10 @@ function pondView(){
 
   const cwRep = latest('cp_water'), cw = rowOf(cwRep,p), c = C.cpWater;
   out.push(`<div class="card"><h3>คุณภาพน้ำ ${cwRep?`<span class="lab-date">CP · ${thDate(cwRep.date)}</span>`:''}</h3>`+(cw?`<div class="lab-tiles">`+[
-    tile('ความเค็ม',fix(cw.salinity),'ppt'), tile('pH',fix(cw.ph)), tile('อัลคาไลน์',fix(cw.alk),'',cw.alk==null?null:c.alk(cw.alk)),
+    tile('ความเค็ม',fix(cw.salinity),'ppt'), tile('pH',fix(cw.ph),'',cw.ph==null?null:c.ph(cw.ph)), tile('อัลคาไลน์',fix(cw.alk),'',cw.alk==null?null:c.alk(cw.alk)),
     tile('แอมโมเนีย',fix(cw.nh3,2),'',cw.nh3==null?null:c.nh3(cw.nh3)), tile('ไนไตรท์',fix(cw.no2,2),'',cw.no2==null?null:c.no2(cw.no2)),
-    tile('แคลเซียม',fix(cw.ca)), tile('แมกนีเซียม',fix(cw.mg)), tile('โพแทสเซียม',fix(cw.k)),
-    tile('สารอินทรีย์',fix(cw.om),'',cw.om==null?null:c.om(cw.om)), tile('ความขุ่นใส',fix(cw.ntu,2),'NTU',cw.ntu==null?null:c.ntu(cw.ntu)),
+    tile('แคลเซียม',fix(cw.ca),'',cw.ca==null?null:c.ca(cw.ca,cw)), tile('แมกนีเซียม',fix(cw.mg),'',cw.mg==null?null:c.mg(cw.mg,cw)), tile('โพแทสเซียม',fix(cw.k),'',cw.k==null?null:c.k(cw.k,cw)),
+    tile('สารอินทรีย์',fix(cw.om),'',cw.om==null?null:c.om(cw.om,cw)), tile('ความขุ่นใส',fix(cw.ntu,2),'NTU',cw.ntu==null?null:c.ntu(cw.ntu,cw)),
   ].join('')+`</div>`:'<p class="hint">ไม่มีผลคุณภาพน้ำของบ่อนี้</p>')+`</div>`);
 
   const vw=[], vl=[];
@@ -203,8 +215,11 @@ function watchList(){
   const cw = latest('cp_water');
   if(cw) cw.rows.forEach(r=>{ const c=C.cpWater;
     if((r.yvc!=null&&!c.y(r.yvc))||(r.gvc!=null&&!c.g(r.gvc))) add(r.pond,'เชื้อในน้ำเกิน (CP)');
-    if(r.om!=null&&!c.om(r.om)) add(r.pond,'สารอินทรีย์สูง '+r.om);
-    if(r.ntu!=null&&!c.ntu(r.ntu)) add(r.pond,(r.ntu>10?'น้ำขุ่น ':'น้ำใสเกิน ')+r.ntu+' NTU');
+    if(r.om!=null&&!c.om(r.om,r)) add(r.pond,'สารอินทรีย์สูง '+r.om);
+    if(r.ntu!=null&&!c.ntu(r.ntu,r)) add(r.pond,'น้ำขุ่น '+r.ntu+' NTU'+(r.age===0?' (บ่อพักควร < 1)':''));
+    if(r.ph!=null&&!c.ph(r.ph)) add(r.pond,'pH '+r.ph);
+    if(r.no2!=null&&!c.no2(r.no2)) add(r.pond,'ไนไตรท์สูง '+r.no2);
+    ['ca','mg','k'].forEach(k=>{ if(r[k]!=null&&!c[k](r[k],r)) add(r.pond,({ca:'แคลเซียม',mg:'แมกนีเซียม',k:'โพแทสเซียม'})[k]+'ต่ำ '+r[k]); });
     if(r.alk!=null&&!c.alk(r.alk)) add(r.pond,'อัลคาไลน์ต่ำ '+r.alk);
     if(r.nh3!=null&&!c.nh3(r.nh3)) add(r.pond,'แอมโมเนียสูง '+r.nh3);
   });
