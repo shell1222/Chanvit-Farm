@@ -532,6 +532,7 @@ function scrollBelowTopbar(el){
   input[type="date"]{-webkit-appearance:none;appearance:none;box-sizing:border-box;width:100%;max-width:100%;min-width:0;display:block;min-height:40px;}
   input[type="date"]::-webkit-date-and-time-value{text-align:left;}
 </style>
+<link rel="stylesheet" href="lab.css">
 </head>
 <body>
 
@@ -583,6 +584,7 @@ function scrollBelowTopbar(el){
   <div class="tab" data-tab="withdraw" onclick="switchTab('withdraw')">📦 เบิกของ</div>
   <div class="tab" data-tab="summary" onclick="switchTab('summary')">📊 สรุปปีนี้</div>
   <div class="tab" data-tab="ranking" onclick="switchTab('ranking')">🏆 อันดับบ่อ</div>
+  <div class="tab" data-tab="lab" onclick="switchTab('lab')"><i class="ti ti-microscope"></i> ผลแลป</div>
 </div>
 
 <div class="container">
@@ -1146,6 +1148,10 @@ function scrollBelowTopbar(el){
   </div>
 
   <!-- ============ TAB: FEED CEILING ============ -->
+  <div class="tab-content" id="tab-lab" style="display:none;">
+    <div id="labWrap" style="display:grid;gap:14px;"></div>
+  </div>
+
   <div class="tab-content" id="tab-ranking" style="display:none;">
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
@@ -2007,7 +2013,7 @@ const TAB_LABELS = {
   ponds: 'ข้อมูลบ่อ', status: 'สถานะบ่อ', cost: 'บัญชีต้นทุน', withdraw: 'เบิกของ',
   history: 'ประวัติการจับ', summary: 'สรุปปีนี้',
   releaseplan: 'แผนการปล่อย', harvestplan: 'แผนการจับ',
-  feedmix: 'ต้นทุนต่อหน่วย', feedceiling: 'เพดานอาหาร', ranking: 'อันดับบ่อ'
+  feedmix: 'ต้นทุนต่อหน่วย', feedceiling: 'เพดานอาหาร', ranking: 'อันดับบ่อ', lab: 'ผลแลป'
 };
 
 function getUserRole(name){ return (STATE.userRoles && STATE.userRoles[name]) || 'user'; }
@@ -2323,6 +2329,7 @@ function switchTab(name){
   if(name==='feedmix') renderFeedMixTab();
   if(name==='feedceiling') renderFeedCeilingTab();
   if(name==='ranking') renderRankingTab();
+  if(name==='lab') renderLabTab();
   logActivity('เปิดแท็บ', TAB_LABELS[name] || name);
 }
 
@@ -8273,5 +8280,6 @@ async function ycConfirm(){
 }
 .pin-key:active{background:rgba(255,255,255,0.3);transform:scale(0.93);}
 </style>
+<script src="lab.js"></script>
 </body>
 </html>
