@@ -36,7 +36,7 @@ const C = {
 function byAge(x, bands){ if(x==null) return bands[0][1]; for(const [max,val] of bands) if(x<=max) return val; return bands[bands.length-1][1]; }
 const BAD_LIVER_TXT = /บวม|อักเสบ|30%/;
 
-let DATA = null, loading = null, curView = 'co', curCo = 'cp', curPond = null;
+let DATA = null, loading = null, curView = 'co', curCo = 'cp', curPond = null, curMetric = 'wY';
 const sel = {}; // วันที่ที่เลือกต่อ type
 
 /* ---------- helpers ---------- */
@@ -106,7 +106,7 @@ const RENDER = {
   unity_health(rep){ const c=C.health;
     return `<div class="lab-tw"><table class="lab-t"><thead><tr><th>บ่อ</th><th>ระดับไขมัน</th><th>พูตับ / ผนังตับ</th><th>ATM</th><th>เมลานิน</th><th>ตัวอ่อน EHP</th><th>สปอร์ EHP</th><th>ลำไส้</th><th>เหงือก / ภายนอก</th><th>คำแนะนำ</th></tr></thead><tbody>`+
       rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td>${txtCell(r.fat, parseInt(r.fat)<80)}<td class="lab-wrap ${BAD_LIVER_TXT.test(r.liver||'')?'lab-bad':''}">${esc(r.liver||'–')}</td>${cell(r.atm,c.atm,pct(r.atm))}${cell(r.melanin,null,pct(r.melanin))}${cell(r.ehp,c.ehp,pct(r.ehp))}${cell(r.spore,c.spore,pct(r.spore))}${txtCell(r.gut, r.gut==='อักเสบ')}${txtCell(r.outside, !!r.outside)}<td class="lab-wrap">${esc(r.advice||'–')}</td></tr>`).join('')+
-      `</tbody></table></div>${rep.note?`<p class="lab-note">${esc(rep.note)} · ค่าที่อ่านไม่ชัดจะถามก่อนลงข้อมูล</p>`:''}`;
+      `</tbody></table></div>`;
   },
   unity_plates(rep){
     return `<div class="lab-plates">`+rep.rows.map(r=>`<div><div class="lab-plate ${r.liver==='yellow'?'y':''}">${esc(r.pond)}</div>${r.liver==='yellow'?'มีโคโลนีเหลือง':'ไม่พบ'}</div>`).join('')+
@@ -130,12 +130,74 @@ function coView(){
     const dateSel = list.length>1
       ? `<select class="lab-date-sel" onchange="labSetDate('${t}',this.value)">${list.map(r=>`<option value="${r.date}" ${r===rep?'selected':''}>${thDate(r.date)}</option>`).join('')}</select>`
       : `<span class="lab-date">${thDate(rep.date)}</span>`;
-    return `<div class="lab-rep"><h3>${TYPE_LABEL[t]} ${dateSel}</h3>${RENDER[t](rep)}${adviceHtml(rep)}</div>`;
+    return `<div class="lab-rep"><h3>${TYPE_LABEL[t]} ${dateSel}</h3>${RENDER[t](rep)}${rep.note?`<p class="lab-note">${esc(rep.note)}</p>`:''}${adviceHtml(rep)}</div>`;
   }).join('') || '<p class="hint">ยังไม่มีผลของบริษัทนี้</p>';
   const c = LAB_CO[curCo];
   return `<div class="lab-chips">${chips}</div>
     <div class="card"><div class="lab-co-head"><b><i class="lab-dot" style="background:${c.color}"></i>${c.n}</b><span class="hint">ตรวจทุกวัน${c.day}</span></div>${blocks}</div>`;
 }
+
+/* ---------- กราฟแนวโน้มรายบ่อ ---------- */
+const pctNum = v => v==null ? null : (typeof v==='number' ? v : (parseInt(v) || null));
+const METRICS = [
+  {k:'wY', n:'เชื้อเหลืองในน้ำ', u:'CFU/ml', log:true, src:[['cp','cp_water',r=>r.yvc],['unify','unify_tcbs',r=>r.waterY]], thr:[[1000,'เกณฑ์ 10³']]},
+  {k:'wG', n:'เชื้อเขียวในน้ำ', u:'CFU/ml', log:true, src:[['cp','cp_water',r=>r.gvc],['unify','unify_tcbs',r=>r.waterG]], thr:[[100,'CP 10²'],[1000,'Unify 10³']]},
+  {k:'lY', n:'เชื้อเหลืองในตับ', u:'CFU', log:true, src:[['cp','cp_shrimp',r=>r.yvc],['unify','unify_tcbs',r=>r.liverY]], thr:[[1000,'CP 10³'],[100000,'Unify 10⁵']]},
+  {k:'lG', n:'เชื้อเขียวในตับ', u:'CFU', log:true, src:[['cp','cp_shrimp',r=>r.gvc],['unify','unify_tcbs',r=>r.liverG]], thr:[[100,'CP 10²'],[100000,'Unify 10⁵']]},
+  {k:'om', n:'สารอินทรีย์', u:'ppm', src:[['cp','cp_water',r=>r.om]], thr:[[10,'เกณฑ์ 10']]},
+  {k:'ntu', n:'ความขุ่นใส', u:'NTU', src:[['cp','cp_water',r=>r.ntu]], thr:[[10,'เกณฑ์ 10']]},
+  {k:'alk', n:'อัลคาไลน์', u:'ppm', src:[['cp','cp_water',r=>r.alk]], thr:[[120,'ขั้นต่ำ 120']]},
+  {k:'nh3', n:'แอมโมเนีย', u:'ppm', src:[['cp','cp_water',r=>r.nh3]], thr:[[1,'เกณฑ์ 1']]},
+  {k:'atm', n:'ATM', u:'%', src:[['unify','unify_health',r=>r.atm],['unify','unify_pond',r=>r.atm],['unity','unity_health',r=>r.atm]], thr:[[10,'เกณฑ์ 10%']]},
+  {k:'ehp', n:'ตัวอ่อน EHP', u:'%', src:[['unify','unify_health',r=>r.ehp],['unify','unify_pond',r=>r.ehp],['unity','unity_health',r=>r.ehp]], thr:[[10,'เกณฑ์ 10%']]},
+  {k:'fat', n:'% ไขมัน', u:'%', src:[['unify','unify_health',r=>r.fat],['unify','unify_pond',r=>r.fat],['unity','unity_health',r=>pctNum(r.fat)]], thr:[[80,'ขั้นต่ำ 80%']]},
+  {k:'wt', n:'น้ำหนักเฉลี่ย', u:'กรัม', src:[['unify','unify_health',r=>r.weight],['unify','unify_pond',r=>r.weight],['cp','cp_shrimp',r=>r.weight]], thr:[]},
+];
+function seriesOf(m, p){
+  const by = {};
+  m.src.forEach(([co,type,f])=>reportsOf(type).forEach(rep=>{ const row=rowOf(rep,p); if(!row) return; const v=f(row); if(v==null||isNaN(v)) return;
+    (by[co]=by[co]||[]).push({d:rep.date, v:Number(v)}); }));
+  Object.values(by).forEach(a=>a.sort((x,y)=>x.d<y.d?-1:1));
+  return by;
+}
+function trendCard(p){
+  const avail = METRICS.filter(m=>Object.values(seriesOf(m,p)).some(a=>a.length));
+  if(!avail.length) return '';
+  if(!avail.some(m=>m.k===curMetric)) curMetric = avail[0].k;
+  const m = METRICS.find(x=>x.k===curMetric), by = seriesOf(m,p);
+  const pts = Object.values(by).flat();
+  const days = iso => Date.parse(iso+'T00:00:00Z')/86400000;
+  const d0 = Math.min(...pts.map(x=>days(x.d))), d1 = Math.max(...pts.map(x=>days(x.d)));
+  const W=420, H=230, L=46, R=14, T=14, B=34;
+  const X = d => d1===d0 ? (L+W-R)/2 : L + (days(d)-d0)/(d1-d0)*(W-L-R);
+  let yTicks, Y;
+  if(m.log){
+    const top = Math.max(3, ...pts.map(x=>x.v>0?Math.ceil(Math.log10(x.v)):0), ...m.thr.map(t=>Math.ceil(Math.log10(t[0]))));
+    Y = v => T + (H-T-B) * (1 - (v>0?Math.log10(v):0)/top);
+    yTicks = Array.from({length:top+1},(_,e)=>[e===0?0:10**e, e===0?'ND':`10<tspan dy="-5" font-size="9">${e}</tspan>`]);
+  } else {
+    const vals = pts.map(x=>x.v).concat(m.thr.map(t=>t[0]));
+    let lo = Math.min(0,...vals), hi = Math.max(...vals)*1.15 || 1;
+    const step = niceStep((hi-lo)/4); hi = Math.ceil(hi/step)*step;
+    Y = v => T + (H-T-B) * (1 - (v-lo)/(hi-lo));
+    yTicks = []; for(let v=lo; v<=hi+1e-9; v+=step) yTicks.push([v, String(+v.toFixed(2))]);
+  }
+  let g = '';
+  yTicks.forEach(([v,l])=>{ const y=Y(v).toFixed(1); g+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#e2e5e1"/><text x="${L-6}" y="${+y+4}" text-anchor="end" font-size="11" fill="#5f6b65">${l}</text>`; });
+  m.thr.forEach(([v,l])=>{ const y=Y(v).toFixed(1); g+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#a32d2d" stroke-width="1.2" stroke-dasharray="5 4"/><text x="${L+4}" y="${+y-4}" text-anchor="start" font-size="10.5" fill="#a32d2d" paint-order="stroke" stroke="#fff" stroke-width="3">${l}</text>`; });
+  const dates = [...new Set(pts.map(x=>x.d))].sort(), every = Math.ceil(dates.length/6);
+  dates.forEach((d,i)=>{ if(i%every && i!==dates.length-1) return; const [y,mo,da]=d.split('-'); g+=`<text x="${X(d).toFixed(1)}" y="${H-12}" text-anchor="middle" font-size="11" fill="#5f6b65">${+da}/${+mo}</text>`; });
+  Object.entries(by).forEach(([co,a])=>{ const col=LAB_CO[co].color;
+    if(a.length>1) g+=`<polyline points="${a.map(x=>X(x.d).toFixed(1)+','+Y(x.v).toFixed(1)).join(' ')}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+    a.forEach((x,i)=>{ g+=`<circle cx="${X(x.d).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="${i===a.length-1?4.5:3.2}" fill="${col}" stroke="#fff" stroke-width="1.5"><title>${LAB_CO[co].n} ${thDate(x.d)}: ${m.log?sci(x.v).replace(/<[^>]+>/g,''):x.v} ${m.u}</title></circle>`; });
+  });
+  const chips = avail.map(x=>`<button class="lab-chip lab-chip-sm" aria-pressed="${x.k===m.k}" onclick="labSetMetric('${x.k}')">${x.n}</button>`).join('');
+  const legend = Object.keys(by).map(co=>`<span><i class="lab-sw" style="background:${LAB_CO[co].color}"></i>${LAB_CO[co].n}</span>`).join('');
+  return `<div class="card"><h3>แนวโน้มบ่อ ${esc(p)}</h3><div class="lab-chips">${chips}</div>
+    <svg class="lab-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="กราฟ${m.n} บ่อ ${esc(p)}">${g}</svg>
+    <div class="lab-legend">${legend}<span>${m.u}${m.log?' · แกนตั้งเป็นเลขยกกำลัง 10':''}</span></div></div>`;
+}
+function niceStep(x){ const e=10**Math.floor(Math.log10(x||1)), f=x/e; return (f<=1?1:f<=2?2:f<=5?5:10)*e; }
 
 /* ---------- มุมมองตามบ่อ ---------- */
 function allPonds(){
@@ -151,6 +213,7 @@ function pondView(){
   if(!curPond || !ponds.includes(curPond)) curPond = ponds[0];
   const p = curPond, out = [];
   out.push(`<div class="lab-chips">${ponds.map(x=>`<button class="lab-chip" aria-pressed="${x===p}" onclick="labSetPond('${esc(x)}')">บ่อ ${esc(x)}</button>`).join('')}</div>`);
+  out.push(trendCard(p));
 
   const cwRep = latest('cp_water'), cw = rowOf(cwRep,p), c = C.cpWater;
   out.push(`<div class="card"><h3>คุณภาพน้ำ ${cwRep?`<span class="lab-date">CP · ${thDate(cwRep.date)}</span>`:''}</h3>`+(cw?`<div class="lab-tiles">`+[
@@ -253,6 +316,7 @@ window.renderLabTab = function(){
 window.labSetView = v => { curView = v; render(); };
 window.labSetCo = k => { curCo = k; render(); };
 window.labSetPond = p => { curPond = p; render(); };
+window.labSetMetric = k => { curMetric = k; render(); };
 window.labSetDate = (t,d) => { sel[t] = d; render(); };
 window.labGotoPond = p => {
   curPond = p; curView = 'pond'; render();
