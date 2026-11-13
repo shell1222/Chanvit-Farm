@@ -1,6 +1,6 @@
 /* ============================================================
    LAB TAB — ผลแลปจาก Unify (จ.), CP (อ.), Unity (ศ.)
-   ข้อมูลอยู่ใน lab-data.json (แยกจากข้อมูลฟาร์มใน Firebase)
+   ข้อมูลอยู่ใน Firestore คอลเลกชัน labReports (แยกจากข้อมูลฟาร์ม farms/chanvit)
    ============================================================ */
 (function(){
 const LAB_CO = {
@@ -46,13 +46,18 @@ const current = type => { const list=reportsOf(type); return list.find(r=>r.date
 const rowOf = (rep,p) => rep ? rep.rows.find(r=>r.pond===p) : null;
 
 /* ---------- โหลดข้อมูล ---------- */
+// อ่านจาก Firestore คอลเลกชัน labReports (แยกจาก farms/chanvit) และฟังการเปลี่ยนแปลงสด
 function load(){
   if(DATA) return Promise.resolve(DATA);
   if(loading) return loading;
-  loading = fetch('lab-data.json', {cache:'no-store'})
-    .then(r => { if(!r.ok) throw new Error(r.status); return r.json(); })
-    .then(j => (DATA = j))
-    .catch(e => { loading = null; throw e; });
+  loading = new Promise((resolve, reject) => {
+    db.collection('labReports').onSnapshot(snap => {
+      DATA = { reports: snap.docs.map(d => d.data()).filter(r => r && r.type && Array.isArray(r.rows)) };
+      resolve(DATA);
+      const tab = document.getElementById('tab-lab');
+      if(tab && tab.style.display !== 'none') render();
+    }, err => { console.error('labReports:', err); loading = null; reject(err); });
+  });
   return loading;
 }
 
