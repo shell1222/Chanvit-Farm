@@ -79,16 +79,28 @@ const rowOf = (rep,p) => rep ? rep.rows.find(r=>r.pond===p) : null;
 
 /* ---------- โหลดข้อมูล ---------- */
 // อ่านจาก Firestore คอลเลกชัน labReports (แยกจาก farms/chanvit) และฟังการเปลี่ยนแปลงสด
+// แสดงผลที่จำไว้ในเครื่องทันที แล้วค่อยอัปเดตเมื่อ Firestore ตอบ (เน็ตช้าจะไม่ค้างหน้า "กำลังโหลด")
+const CACHE_KEY = 'labReportsCache';
+let subscribed = false;
+function readCache(){ try{ const c = JSON.parse(localStorage.getItem(CACHE_KEY)); return c && Array.isArray(c.reports) ? c : null; }catch(e){ return null; } }
+function writeCache(d){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(d)); }catch(e){} }
+function subscribe(onFirst, onError){
+  if(subscribed) return; subscribed = true;
+  db.collection('labReports').onSnapshot(snap => {
+    DATA = { reports: snap.docs.map(d => d.data()).filter(r => r && r.type && Array.isArray(r.rows)) };
+    writeCache(DATA);
+    onFirst && onFirst(DATA); onFirst = null;
+    const tab = document.getElementById('tab-lab');
+    if(tab && tab.style.display !== 'none') render();
+  }, err => { console.error('labReports:', err); subscribed = false; onError && onError(err); });
+}
 function load(){
   if(DATA) return Promise.resolve(DATA);
   if(loading) return loading;
+  const cached = readCache();
   loading = new Promise((resolve, reject) => {
-    db.collection('labReports').onSnapshot(snap => {
-      DATA = { reports: snap.docs.map(d => d.data()).filter(r => r && r.type && Array.isArray(r.rows)) };
-      resolve(DATA);
-      const tab = document.getElementById('tab-lab');
-      if(tab && tab.style.display !== 'none') render();
-    }, err => { console.error('labReports:', err); loading = null; reject(err); });
+    subscribe(resolve, err => { loading = null; if(!DATA) reject(err); });
+    if(cached){ DATA = cached; resolve(DATA); }
   });
   return loading;
 }
@@ -343,7 +355,10 @@ function render(){
 
 window.renderLabTab = function(){
   const wrap = $('labWrap'); if(!wrap) return;
-  if(!DATA) wrap.innerHTML = '<div class="card"><p class="hint">กำลังโหลดผลแลป…</p></div>';
+  if(!DATA){
+    wrap.innerHTML = '<div class="card"><p class="hint">กำลังโหลดผลแลป…</p></div>';
+    setTimeout(()=>{ if(!DATA && $('labWrap')) $('labWrap').innerHTML = '<div class="card"><p class="hint">สัญญาณช้า ยังโหลดผลแลปไม่เสร็จ รอสักครู่ หรือปิดแอปแล้วเปิดใหม่</p></div>'; }, 8000);
+  }
   load().then(render).catch(()=>{ wrap.innerHTML = '<div class="card"><p class="hint">โหลดผลแลปไม่สำเร็จ ลองรีเฟรชหน้าอีกครั้ง</p></div>'; });
 };
 window.labSetView = v => { curView = v; render(); };
