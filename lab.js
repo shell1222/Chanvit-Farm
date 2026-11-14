@@ -274,7 +274,7 @@ function pondView(){
     if(r) cols.push({n:'Unify',d:rep.date,fat:r.fat,atm:r.atm,atrophy:r.atrophy,ehp:r.ehp,spore:r.spore,gut:r.gut,leg:r.leg,gill:r.gill,weight:r.weight,size:r.size,pdg:r.pdg,age:r.age}); });
   const unRep = latest('unity_health'), un = rowOf(unRep,p);
   if(un) cols.push({n:'Unity',d:unRep.date,fatTxt:un.fat,fat:parseInt(un.fat),atm:un.atm,liverTxt:un.liver,ehp:un.ehp,spore:un.spore,gutTxt:un.gut,gill:un.outside});
-  cols.sort((a,b)=>a.d<b.d?1:-1);
+  cols.sort((a,b)=>a.d<b.d?-1:1); // เก่า → ใหม่ ซ้ายไปขวา เหมือนกราฟ
   const h = C.health, chk = (v,f) => v==null||isNaN(v) ? null : f(v);
   const rowsDef = [
     ['% ไขมัน', x=>x.fatTxt||pct(x.fat), x=>chk(x.fat,h.fat)],
