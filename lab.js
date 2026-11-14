@@ -56,7 +56,7 @@ function ageCell(r, rep){
 }
 const BAD_LIVER_TXT = /บวม|อักเสบ|30%/;
 
-let DATA = null, loading = null, curView = 'co', curCo = 'cp', curPond = null, curMetric = 'wY';
+let DATA = null, loading = null, curView = 'co', curCo = 'cp', curPond = null, curMetric = 'wY', curPoint = null;
 const sel = {}; // วันที่ที่เลือกต่อ type
 
 /* ---------- helpers ---------- */
@@ -209,14 +209,26 @@ function trendCard(p){
   dates.forEach((d,i)=>{ if(i%every && i!==dates.length-1) return; const [y,mo,da]=d.split('-'); g+=`<text x="${X(d).toFixed(1)}" y="${H-12}" text-anchor="middle" font-size="11" fill="#5f6b65">${+da}/${+mo}</text>`; });
   Object.entries(by).forEach(([co,a])=>{ const col=LAB_CO[co].color;
     if(a.length>1) g+=`<polyline points="${a.map(x=>X(x.d).toFixed(1)+','+Y(x.v).toFixed(1)).join(' ')}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`;
-    a.forEach((x,i)=>{ g+=`<circle cx="${X(x.d).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="${i===a.length-1?4.5:3.2}" fill="${col}" stroke="#fff" stroke-width="1.5"><title>${LAB_CO[co].n} ${thDate(x.d)}: ${m.log?sci(x.v).replace(/<[^>]+>/g,''):x.v} ${m.u}</title></circle>`; });
+    a.forEach((x,i)=>{ const on = curPoint && curPoint.co===co && curPoint.d===x.d;
+      g+=`<g class="lab-pt" onclick="labPoint('${co}','${x.d}')"><circle cx="${X(x.d).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="16" fill="transparent"/><circle cx="${X(x.d).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="${on?6:i===a.length-1?4.5:3.2}" fill="${col}" stroke="#fff" stroke-width="1.5"/></g>`; });
   });
+  // ป้ายตัวเลขของจุดที่แตะ
+  const sel = curPoint && by[curPoint.co] && by[curPoint.co].find(x=>x.d===curPoint.d);
+  if(sel){
+    const [, mo, da] = sel.d.split('-');
+    const label = `${LAB_CO[curPoint.co].n} ${+da}/${+mo}: ${m.log ? sciPlain(sel.v) : sel.v} ${m.u}`;
+    const w = label.length*6.4 + 16, h = 24, px = X(sel.d), py = Y(sel.v);
+    const bx = Math.min(Math.max(px - w/2, L), W - R - w), by_ = py - h - 10 < T ? py + 10 : py - h - 10;
+    g += `<g pointer-events="none"><rect x="${bx.toFixed(1)}" y="${by_.toFixed(1)}" width="${w.toFixed(1)}" height="${h}" rx="6" fill="#1f2622" opacity="0.92"/><text x="${(bx+w/2).toFixed(1)}" y="${(by_+16).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">${esc(label)}</text></g>`;
+  }
   const chips = avail.map(x=>`<button class="lab-chip lab-chip-sm" aria-pressed="${x.k===m.k}" onclick="labSetMetric('${x.k}')">${x.n}</button>`).join('');
   const legend = Object.keys(by).map(co=>`<span><i class="lab-sw" style="background:${LAB_CO[co].color}"></i>${LAB_CO[co].n}</span>`).join('');
   return `<div class="card"><h3>แนวโน้มบ่อ ${esc(p)}</h3><div class="lab-chips">${chips}</div>
     <svg class="lab-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="กราฟ${m.n} บ่อ ${esc(p)}">${g}</svg>
-    <div class="lab-legend">${legend}<span>${m.u}${m.log?' · แกนตั้งเป็นเลขยกกำลัง 10':''}</span></div></div>`;
+    <div class="lab-legend">${legend}<span>${m.u}${m.log?' · แกนตั้งเป็นเลขยกกำลัง 10':''} · แตะจุดเพื่อดูตัวเลข</span></div></div>`;
 }
+const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+function sciPlain(v){ if(v===0) return 'ND'; const e=Math.floor(Math.log10(v)); if(e<1) return String(v); const m=+(v/10**e).toFixed(2); return (m===1?'':m+'×')+'10'+String(e).split('').map(d=>SUP[d]).join(''); }
 function niceStep(x){ const e=10**Math.floor(Math.log10(x||1)), f=x/e; return (f<=1?1:f<=2?2:f<=5?5:10)*e; }
 
 /* ---------- มุมมองตามบ่อ ---------- */
@@ -336,8 +348,9 @@ window.renderLabTab = function(){
 };
 window.labSetView = v => { curView = v; render(); };
 window.labSetCo = k => { curCo = k; render(); };
-window.labSetPond = p => { curPond = p; render(); };
-window.labSetMetric = k => { curMetric = k; render(); };
+window.labSetPond = p => { curPond = p; curPoint = null; render(); };
+window.labSetMetric = k => { curMetric = k; curPoint = null; render(); };
+window.labPoint = (co,d) => { curPoint = (curPoint && curPoint.co===co && curPoint.d===d) ? null : {co,d}; render(); };
 window.labSetDate = (t,d) => { sel[t] = d; render(); };
 window.labGotoPond = p => {
   curPond = p; curView = 'pond'; render();
