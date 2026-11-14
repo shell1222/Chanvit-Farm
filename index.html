@@ -3556,6 +3556,7 @@ function renderCostModalPieChart(cycleId, drillCat, drillSubCat){
           legend: { display: false },
           tooltip: {
             callbacks: {
+              title(items){ const c = items[0]; return `${c.label} · รวม ${Math.round(c.raw).toLocaleString('th-TH')} บาท`; },
               label(c){
                 const tot = c.dataset.data.reduce((a,b)=>a+b,0);
                 const pct = ((c.raw/tot)*100).toFixed(0);
@@ -3649,6 +3650,7 @@ function renderCostPieChart(){
         legend: { display: false },
         tooltip: {
           callbacks: {
+            title(items){ const c = items[0]; return `${c.label} · รวม ${Math.round(c.raw).toLocaleString('th-TH')} บาท`; },
             label(c){
               const tot = c.dataset.data.reduce((a,b)=>a+b,0);
               const pct = ((c.raw/tot)*100).toFixed(0);
