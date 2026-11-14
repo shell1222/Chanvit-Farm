@@ -2887,7 +2887,6 @@ const POND_MAP_LAYOUT = [
   {id:'_b1',  x:0.1, y:4.0, w:1.0, h:1.8, color:'#92400e', label:'1 ไร่',  type:'reservoir'},
   {id:'_b2',  x:0.1, y:5.9, w:1.0, h:2.5, color:'#78350f', label:'2 ไร่',  type:'reservoir'},
   {id:'_b3',  x:0.1, y:9.8, w:0.7, h:1.4, color:'#92400e', label:'0.5',    type:'reservoir'},
-  {id:'_b4',  x:4.4, y:9.3, w:1.5, h:1.4, color:'#92400e', label:'1 ไร่',  type:'reservoir'},
 
   // ── กลุ่มกรอบเขียว (6,5,4 / 14,KC3 / 10,9 / 11,KC5,T2/6) ──
   {id:'6',    x:1.2, y:5.9, w:1.5, h:1.7, color:'#bfdbfe'},
@@ -2899,8 +2898,8 @@ const POND_MAP_LAYOUT = [
   {id:'KC3',  x:2.8, y:7.7, w:3.1, h:1.5, color:'#fbcfe8'},
   {id:'T2/4', x:6.0, y:7.7, w:2.0, h:1.5, color:'#f9a8d4'},
 
-  {id:'10',   x:1.2, y:9.3, w:1.5, h:1.4, color:'#bfdbfe'},
-  {id:'9',    x:2.8, y:9.3, w:1.5, h:1.4, color:'#bfdbfe'},
+  {id:'10',   x:1.2, y:9.3, w:2.3, h:1.4, color:'#bfdbfe'},
+  {id:'9',    x:3.6, y:9.3, w:2.3, h:1.4, color:'#bfdbfe'},
   {id:'T2/5', x:6.0, y:9.3, w:2.0, h:1.4, color:'#f9a8d4'},
 
   {id:'11',   x:1.2, y:10.8,w:1.5, h:1.5, color:'#bfdbfe'},
@@ -2930,7 +2929,7 @@ const UNIT = 40;
 const FARM_ZONES = {
   A: { label:'Zone A', color:'#2f5d8a',
        ponds:['1','2','3','4','5','6','9','10','11','12','13','14','T2/2','T2/3','T2/4','T2/5','T2/6','KC2','KC3','KC4','KC5'],
-       mapExtras:['_y24','_y25','_y27','_y23','_y21','_sal','_b1','_b2','_b3','_b4','_y42'] },
+       mapExtras:['_y24','_y25','_y27','_y23','_y21','_sal','_b1','_b2','_b3','_y42'] },
   B: { label:'Zone B', color:'#a16207', shift:{y:-14},
        ponds:['7','8','15','T2/1','KC1'] },
   C: { label:'Zone C', color:'#7c4d8f', shift:{x:14},
