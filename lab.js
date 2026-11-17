@@ -54,6 +54,10 @@ function ageCell(r, rep){
   const diff = theirs != null && Math.abs(theirs - ours) > 1;
   return `<td>${ours}${diff?`<small class="lab-age-diff">บริษัท ${esc(theirs)}</small>`:''}</td>`;
 }
+// จานเพาะเชื้อ Unity: liver = 'yellow' | 'green' | 'mixed' | 'clear', desc = คำอธิบาย, verdict = ที่ Unity สรุป
+const plateCls = r => ({yellow:'y', green:'g', mixed:'m'})[r.liver] || '';
+const plateText = r => r.desc || ({yellow:'มีโคโลนีเหลือง', green:'มีโคโลนีเขียว', mixed:'มีทั้งเหลืองและเขียว'})[r.liver] || 'ไม่พบ';
+const verdictBad = r => /แก้ไข|ด่วน/.test(r.verdict||'') || (!r.verdict && r.liver && r.liver!=='clear');
 const BAD_LIVER_TXT = /บวม|อักเสบ|30%/;
 
 let DATA = null, loading = null, curView = 'co', curCo = 'cp', curPond = null, curMetric = 'wY', curPoint = null;
@@ -141,8 +145,8 @@ const RENDER = {
       `</tbody></table></div>`;
   },
   unity_plates(rep){
-    return `<div class="lab-plates">`+rep.rows.map(r=>`<div><div class="lab-plate ${r.liver==='yellow'?'y':''}">${esc(r.pond)}</div>${r.liver==='yellow'?'มีโคโลนีเหลือง':'ไม่พบ'}</div>`).join('')+
-      `</div><p class="lab-crit">Unity ส่งเป็นรูปจาน ไม่มีตัวเลข เก็บไว้เป็นข้อสังเกต</p>`;
+    return `<div class="lab-plates">`+rep.rows.map(r=>`<div><div class="lab-plate ${plateCls(r)}">${esc(r.pond)}</div>${esc(plateText(r))}${r.verdict?`<b class="lab-verdict ${verdictBad(r)?'bad':'ok'}">${esc(r.verdict)}</b>`:''}</div>`).join('')+
+      `</div><p class="lab-crit">Unity ส่งเป็นรูปจาน ไม่มีตัวเลข · สีจาน: เหลือง = โคโลนีเหลืองเด่น · เขียวเข้ม = โคโลนีเขียวเด่น</p>`;
   },
 };
 function adviceHtml(rep, pond){
@@ -279,7 +283,7 @@ function pondView(){
     rows.map(r=>`<tr><td>${r[0]}</td><td>${thDate(r[1])}</td>${cell(r[2],r[4],sci(r[2]),'lab-v')}${cell(r[3],r[5],sci(r[3]),'lab-v')}</tr>`).join('')+extra+
     `</tbody></table></div><p class="lab-crit">${unit} · ใช้เกณฑ์ของบริษัทที่ตรวจ</p>` : '<p class="hint">ยังไม่มีผล</p>';
   out.push(`<div class="lab-2col"><div class="card"><h3>เชื้อในน้ำ</h3>${vib(vw,'CFU/ml')}</div>
-    <div class="card"><h3>เชื้อในตับ</h3>${vib(vl,'CFU/g', pl?`<tr><td>Unity</td><td>${thDate(plRep.date)}</td><td colspan="2" class="${pl.liver==='yellow'?'lab-bad':'lab-ok'}">${pl.liver==='yellow'?'มีโคโลนีเหลือง (รูปจาน)':'ไม่พบ (รูปจาน)'}</td></tr>`:'')}</div></div>`);
+    <div class="card"><h3>เชื้อในตับ</h3>${vib(vl,'CFU/g', pl?`<tr><td>Unity</td><td>${thDate(plRep.date)}</td><td colspan="2" class="${verdictBad(pl)?'lab-bad':'lab-ok'}">${esc(plateText(pl))}${pl.verdict?' · '+esc(pl.verdict):''} (รูปจาน)</td></tr>`:'')}</div></div>`);
 
   const cols=[];
   ['unify_health','unify_pond'].forEach(t=>{ const rep=latest(t), r=rowOf(rep,p);
@@ -337,6 +341,8 @@ function watchList(){
   if(cs) cs.rows.forEach(r=>{ if(!C.cpShrimp.y(r.yvc)||!C.cpShrimp.g(r.gvc)) add(r.pond,'เชื้อในตับเกิน (CP)'); });
   const uh = latest('unify_health');
   if(uh) uh.rows.forEach(r=>{ if(r.atm!=null&&!C.health.atm(r.atm)) add(r.pond,'ATM '+r.atm+'%'); if(r.ehp!=null&&!C.health.ehp(r.ehp)) add(r.pond,'ตัวอ่อน EHP '+r.ehp+'%'); if(r.gut!=null&&!C.health.gut(r.gut)) add(r.pond,'ลำไส้อักเสบ '+r.gut+'%'); });
+  const upl = latest('unity_plates');
+  if(upl) upl.rows.forEach(r=>{ if(r.verdict && verdictBad(r)) add(r.pond,'Unity เพาะเชื้อตับ: '+r.verdict); });
   const un = latest('unity_health');
   if(un) un.rows.forEach(r=>{ const w=[]; if(r.atm!=null&&!C.health.atm(r.atm)) w.push('ATM '+r.atm+'%'); if(r.ehp!=null&&!C.health.ehp(r.ehp)) w.push('EHP '+r.ehp+'%'); if(/อักเสบ/.test(r.gut||'')) w.push('ลำไส้'+(r.gut==='อักเสบ'?'อักเสบ':r.gut)); if(w.length) add(r.pond,'Unity: '+w.join(' · ')); });
   const list = Object.entries(why).sort((a,b)=>b[1].length-a[1].length);
