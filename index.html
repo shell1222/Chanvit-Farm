@@ -4522,6 +4522,27 @@ function openPondSummaryModal(pondId, cycleId){
       html += `<div id="costModalPieWrap"></div>`;
     }
 
+    // ประวัติการสุ่มไซส์ทั้งรอบ (เฉพาะบ่อที่ปิดแล้ว) แสดงต่อจากแผนภูมิต้นทุน
+    if(isClosed){
+      const allG = STATE.growthRecords||[];
+      const recs = allG
+        .filter(r=>r.pondId===pondId && (!s.releaseDate || r.date >= s.releaseDate) && (!s.closeDate || r.date <= s.closeDate))
+        .sort((a,b)=>a.date<b.date?-1:1);
+      const fmtN = (v,d=2)=> (v==null||v===''||isNaN(v)) ? '-' : Number(v).toLocaleString(undefined,{maximumFractionDigits:d});
+      html += sectionHead('⚖️', `การสุ่มกุ้ง (${recs.length} ครั้ง)`, '#0f6e56');
+      if(!recs.length){
+        html += `<div style="font-size:13px;color:var(--text-secondary);padding:4px 2px;">ไม่มีข้อมูลการสุ่มไซส์ในรอบนี้</div>`;
+      } else {
+        const td = 'padding:7px 8px;border-bottom:1px solid var(--border);border-right:1px solid #eef0ee;text-align:center;white-space:nowrap;';
+        html += `<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;"><table style="width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;"><thead><tr style="background:var(--bg);color:var(--text-secondary);font-size:12px;">
+          <th style="${td}">#</th><th style="${td}">วันที่</th><th style="${td}">อายุ (วัน)</th><th style="${td}">Size (ตัว/กก.)</th><th style="${td}">MBW (g.)</th><th style="${td}">PDG (g./วัน)</th><th style="${td}">อาหารสะสม (กก.)</th>
+        </tr></thead><tbody>` + recs.map((r,i)=>{
+          const pdg = r.pdg != null ? r.pdg : calcPDG(r, allG);
+          return `<tr><td style="${td}">${i+1}</td><td style="${td}">${formatDateShort(r.date)}</td><td style="${td}">${r.age ?? '-'}</td><td style="${td}font-weight:700;">${fmtN(r.size)}</td><td style="${td}">${fmtN(r.mbw)}</td><td style="${td}">${fmtN(pdg)}</td><td style="${td}">${fmtN(r.accFeed,0)}</td></tr>`;
+        }).join('') + `</tbody></table></div>`;
+      }
+    }
+
     if(s.note){
       html += `<div style="background:var(--bg);border-radius:12px;padding:12px 14px;margin-top:10px;font-size:13px;color:var(--text-secondary);">
         📝 <span style="color:var(--text);">${s.note}</span>
