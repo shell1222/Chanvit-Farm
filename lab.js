@@ -11,9 +11,9 @@ const LAB_CO = {
 const TYPE_LABEL = {
   cp_water:'คุณภาพน้ำ + เชื้อในน้ำ', cp_shrimp:'เชื้อในตับกุ้ง',
   unify_health:'สุขภาพกุ้ง (ตารางสรุปทุกบ่อ)', unify_tcbs:'เชื้อบนอาหาร TCBS (น้ำ + ตับ)', unify_pond:'ใบรายงานรายบ่อ (PDF)',
-  unity_health:'ใบแจ้งผลตรวจสุขภาพกุ้ง', unity_plates:'จานเพาะเชื้อตับ',
+  unity_health:'ใบแจ้งผลตรวจสุขภาพกุ้ง', unity_liver:'เชื้อในตับ (ตัวเลข)', unity_plates:'จานเพาะเชื้อตับ',
 };
-const TYPE_ORDER = ['cp_water','cp_shrimp','unify_health','unify_tcbs','unify_pond','unity_health','unity_plates'];
+const TYPE_ORDER = ['cp_water','cp_shrimp','unify_health','unify_tcbs','unify_pond','unity_health','unity_liver','unity_plates'];
 
 // เกณฑ์: เชื้อใช้ตามที่แต่ละบริษัทระบุ / สีในรายงาน CP · สุขภาพตับเป็นค่าตั้งต้น ปรับได้ที่นี่
 const C = {
@@ -144,6 +144,11 @@ const RENDER = {
       rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td>${txtCell(r.fat, parseInt(r.fat)<80)}<td class="lab-wrap ${BAD_LIVER_TXT.test(r.liver||'')?'lab-bad':''}">${esc(r.liver||'–')}</td>${cell(r.atm,c.atm,pct(r.atm))}${cell(r.melanin,null,pct(r.melanin))}${cell(r.ehp,c.ehp,pct(r.ehp))}${cell(r.spore,c.spore,pct(r.spore))}${txtCell(r.gut, /อักเสบ/.test(r.gut||''))}${txtCell(r.outside, !!r.outside)}<td class="lab-wrap">${esc(r.advice||'–')}</td></tr>`).join('')+
       `</tbody></table></div>`;
   },
+  unity_liver(rep){
+    return `<div class="lab-tw"><table class="lab-t"><thead><tr><th>บ่อ</th><th>เหลือง</th><th>เขียว</th></tr></thead><tbody>`+
+      rep.rows.map(r=>`<tr><td>${esc(r.pond)}</td>${cell(r.yvc,null,sci(r.yvc),'lab-v')}${cell(r.gvc,null,sci(r.gvc),'lab-v')}</tr>`).join('')+
+      `</tbody></table></div><p class="lab-crit">Unity ไม่ได้ระบุเกณฑ์ จึงไม่ระบายสี · เทียบกับบริษัทอื่นได้ในกราฟแนวโน้ม</p>`;
+  },
   unity_plates(rep){
     return `<div class="lab-plates">`+rep.rows.map(r=>`<div><div class="lab-plate ${plateCls(r)}">${esc(r.pond)}</div>${esc(plateText(r))}${r.verdict?`<b class="lab-verdict ${verdictBad(r)?'bad':'ok'}">${esc(r.verdict)}</b>`:''}</div>`).join('')+
       `</div><p class="lab-crit">Unity ส่งเป็นรูปจาน ไม่มีตัวเลข · สีจาน: เหลือง = โคโลนีเหลืองเด่น · เขียวเข้ม = โคโลนีเขียวเด่น</p>`;
@@ -178,8 +183,8 @@ const pctNum = v => v==null ? null : (typeof v==='number' ? v : (parseInt(v) || 
 const METRICS = [
   {k:'wY', n:'เชื้อเหลืองในน้ำ', u:'CFU/ml', log:true, src:[['cp','cp_water',r=>r.yvc],['unify','unify_tcbs',r=>r.waterY]], thr:[[1000,'เกณฑ์ 10³']]},
   {k:'wG', n:'เชื้อเขียวในน้ำ', u:'CFU/ml', log:true, src:[['cp','cp_water',r=>r.gvc],['unify','unify_tcbs',r=>r.waterG]], thr:[[100,'CP 10²'],[1000,'Unify 10³']]},
-  {k:'lY', n:'เชื้อเหลืองในตับ', u:'CFU', log:true, src:[['cp','cp_shrimp',r=>r.yvc],['unify','unify_tcbs',r=>r.liverY]], thr:[[1000,'CP 10³'],[100000,'Unify 10⁵']]},
-  {k:'lG', n:'เชื้อเขียวในตับ', u:'CFU', log:true, src:[['cp','cp_shrimp',r=>r.gvc],['unify','unify_tcbs',r=>r.liverG]], thr:[[100,'CP 10²'],[100000,'Unify 10⁵']]},
+  {k:'lY', n:'เชื้อเหลืองในตับ', u:'CFU', log:true, src:[['cp','cp_shrimp',r=>r.yvc],['unify','unify_tcbs',r=>r.liverY],['unity','unity_liver',r=>r.yvc]], thr:[[1000,'CP 10³'],[100000,'Unify 10⁵']]},
+  {k:'lG', n:'เชื้อเขียวในตับ', u:'CFU', log:true, src:[['cp','cp_shrimp',r=>r.gvc],['unify','unify_tcbs',r=>r.liverG],['unity','unity_liver',r=>r.gvc]], thr:[[100,'CP 10²'],[100000,'Unify 10⁵']]},
   {k:'om', n:'สารอินทรีย์', u:'ppm', src:[['cp','cp_water',r=>r.om]], thr:[[10,'เกณฑ์ 10']]},
   {k:'ntu', n:'ความขุ่นใส', u:'NTU', src:[['cp','cp_water',r=>r.ntu]], thr:[[10,'เกณฑ์ 10']]},
   {k:'alk', n:'อัลคาไลน์', u:'ppm', src:[['cp','cp_water',r=>r.alk]], thr:[[120,'ขั้นต่ำ 120']]},
@@ -278,6 +283,8 @@ function pondView(){
   const csRep = latest('cp_shrimp'), cs = rowOf(csRep,p);
   if(cs) vl.push(['CP',csRep.date,cs.yvc,cs.gvc,C.cpShrimp.y,C.cpShrimp.g]);
   if(tc) vl.push(['Unify',tcRep.date,tc.liverY,tc.liverG,C.unifyLiver,C.unifyLiver]);
+  const ulRep = latest('unity_liver'), ul = rowOf(ulRep,p);
+  if(ul) vl.push(['Unity',ulRep.date,ul.yvc,ul.gvc,null,null]);
   const plRep = latest('unity_plates'), pl = rowOf(plRep,p);
   const vib = (rows,unit,extra='') => (rows.length||extra) ? `<div class="lab-tw"><table class="lab-t"><thead><tr><th>บริษัท</th><th>วันที่</th><th>เหลือง</th><th>เขียว</th></tr></thead><tbody>`+
     rows.map(r=>`<tr><td>${r[0]}</td><td>${thDate(r[1])}</td>${cell(r[2],r[4],sci(r[2]),'lab-v')}${cell(r[3],r[5],sci(r[3]),'lab-v')}</tr>`).join('')+extra+
